@@ -58,6 +58,19 @@ pnpm deploy:dev    # cadence-jkn-dev → https://cadence-jkn-dev.web.app
 pnpm deploy:prod   # cadence-jkn-prod → https://cadence.jkn.dev
 ```
 
+Each deploy pushes hosting, Firestore rules, and indexes together.
+
+### Continuous deployment to dev
+
+Every push to `main` runs lint, type-check, unit, rules, and end-to-end tests, then deploys to `cadence-jkn-dev` (`.github/workflows/ci.yml`). The deploy step needs a service account key in the repository secret `FIREBASE_SERVICE_ACCOUNT_DEV`; without it the step is skipped with a warning. One-time setup:
+
+1. In the Google Cloud console for `cadence-jkn-dev`, IAM & Admin, Service Accounts: create `github-deploy` and grant it Firebase Hosting Admin, Firebase Rules Admin, Cloud Datastore Index Admin, and Viewer.
+2. Keys tab: add a JSON key and download it.
+3. Store it as the secret and delete the file:
+   ```sh
+   gh secret set FIREBASE_SERVICE_ACCOUNT_DEV < ~/Downloads/<key>.json && rm ~/Downloads/<key>.json
+   ```
+
 Project aliases are in `.firebaserc` (default is dev). Environments: `.env.development` (emulators), `.env.staging` (dev project), `.env.production` (prod project). All committed; Firebase web config values are public identifiers, not secrets.
 
 In production the first admin is created by hand: sign in once, then in the Firebase console create `users/{uid}` with `email`, `displayName`, `photoURL: null`, `role: "admin"`, `timezone`, `status: "active"`, `createdAt`, `updatedAt`.

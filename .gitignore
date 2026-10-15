@@ -40,3 +40,15 @@ __screenshots__/
 
 test-results/
 playwright-report/
+
+# Firebase emulator state
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*-debug.log
+emulator-data/
+
+# local env overrides
+.env.local
+.env.*.local

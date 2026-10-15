@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "cadence-jkn-dev",
+    "dev": "cadence-jkn-dev",
+    "prod": "cadence-jkn-prod"
+  }
+}

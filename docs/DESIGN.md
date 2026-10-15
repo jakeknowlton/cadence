@@ -1,20 +1,20 @@
 # Cadence: Technical Design
 
-How [SPEC.md](SPEC.md) is built. Draft v0.4. The spec defines behaviour; this document defines structure. Where the two disagree, the spec wins and this document is wrong.
+How [SPEC.md](SPEC.md) is built. v0.5. The spec defines behaviour; this document defines structure. Where the two disagree, the spec wins and this document is wrong.
 
 ## Architecture
 
-The frontend talks to Firestore directly through VueFire for all reads and nearly all writes, with Firestore security rules as the authority on who may do what. A small set of Cloud Functions for Firebase (2nd gen, running on Cloud Run) handles the few things a browser cannot or should not do. There is no API server.
+The frontend talks to Firestore directly through VueFire for every read and write, with Firestore security rules as the only server-side logic. There are no Cloud Functions and no API server, so the app runs on Firebase's free Spark plan. Three things that would normally be server work are done differently:
 
-| Need | Why not in the browser | Function |
-|------|-----------------------|----------|
-| Accept an invite: verify the email, create the user, apply memberships, mark the invite used, all at once | Multi-document write with trust checks | `acceptInvite` callable |
-| Notification fan-out and push delivery | Sending push needs server credentials; must run even if the actor closes the tab | `onCompletionCreated` trigger |
-| Monthly rollups for stats and charts | Must be correct regardless of which client wrote; needs all of a month's completions | `onCompletionWritten` trigger, `rebuildSummaries` callable |
-| Last-admin protection, token revocation on deactivate | Rules cannot count documents; only the Admin SDK revokes tokens | `onUserWritten` trigger |
-| Scheduled reminders (v2) | Needs a schedule | `scheduledReminders` |
+| Need | How it works without a server |
+|------|-------------------------------|
+| Accept an invite atomically | The invite document's id is the token. Rules let only a signed-in user with a verified, matching email read it. The client writes the profile and marks the invite accepted in one batch; the rules cross-check the two writes with `get()` and `getAfter()`, so neither can happen alone. |
+| Notification fan-out | The completing member's client writes an inbox item into each recipient's inbox. Rules allow creating an item in another user's inbox only when both are members of the group named on it, the actor is the caller, and the id is `actorId_taskId_periodKey`. Create-only rules make redo and retries idempotent. |
+| Stats and charts | Computed in the app from one task's completions, loaded with a single query. Streaks and rates need the period-by-period walk anyway, and a task has at most a few thousand completions. |
+| Last-admin protection | The admin page disables the action; rules already block deactivated users on every request, so revoking tokens is unnecessary. |
+| Week-start lock | The member who logs the group's first weekly completion flips `weekStartLocked` in the same batch; rules let members change only that field, only to true. |
 
-Cloud Functions require the Blaze pay-as-you-go plan. At this scale the bill rounds to zero. If stats ever outgrow monthly rollups, the next step is the Firestore-to-BigQuery export extension, which adds SQL over completions without replacing anything.
+If push notifications or scheduled reminders are ever wanted, the step up is the Blaze plan plus Cloud Functions; the data model does not change.
 
 ### Stack
 
@@ -23,17 +23,19 @@ Cloud Functions require the Blaze pay-as-you-go plan. At this scale the bill rou
 | Frontend | Vue 3, TypeScript, Vite, Pinia, Vue Router |
 | Firebase binding | VueFire |
 | UI | shadcn-vue (Reka UI primitives, Tailwind CSS v4), components copied into `src/components/ui` |
-| Icons | Phosphor Icons via `@phosphor-icons/vue`; replaces the Lucide imports shadcn-vue scaffolds with |
-| Charts | Decided in Phase 0; candidates `unovis` and `vue-chartjs` |
+| Icons | Phosphor Icons via `@phosphor-icons/vue`; replaces the Lucide imports shadcn-vue scaffolds with. A curated set of 48 is bundled for task and group icons. |
+| Type | Bricolage Grotesque (variable, optical size axis), one family; 800 for headings, tabular numerals for stats |
+| Theme | Light and dark via CSS variables on `:root` and `.dark`; a Pinia theme store persists the choice (auto, light, dark) and an inline script in `index.html` applies it before first paint. Palette: Chalk `#F3F5F2` / Pine Night `#0F1613` backgrounds, Pine `#1E5A45` primary, Ochre `#B8791B` for goal met, Clay `#B4443A` for missed. |
+| Logo | `CadenceMark.vue`: a ring of seven segments around a check, in currentColor. `public/app-icon.svg` is the tile artwork; `pnpm icons` rasterises the PNGs with Playwright. |
+| Charts | `chart.js` via `vue-chartjs` |
 | Dates | `date-fns` and `date-fns-tz` |
 | Validation | `zod` schemas generated from task field definitions |
 | Auth | Firebase Auth: Google sign-in and email-link sign-in |
 | Database | Cloud Firestore with offline persistence |
-| Functions | Cloud Functions for Firebase 2nd gen, Node 22, TypeScript, in `/functions` |
-| Push | Firebase Cloud Messaging web push, service worker from `vite-plugin-pwa` |
+| PWA | `vite-plugin-pwa` manifest and service worker; app badge via the Badging API |
 | Hosting | Firebase Hosting with custom domain `cadence.jkn.dev`, also added to Firebase Auth authorized domains |
 | Local dev | Firebase Emulator Suite: Auth, Firestore, Functions |
-| Tests | Vitest for units and rules (`@firebase/rules-unit-testing`), Playwright end to end against emulators |
+| Tests | Vitest for units and rules (`@firebase/rules-unit-testing` inside the emulator), Playwright end to end |
 | CI | GitHub Actions: lint, type-check, unit, rules tests; deploy on `main` |
 
 ## Data model
@@ -46,19 +48,19 @@ users/{uid}
   status: 'active' | 'deactivated'
   createdAt, updatedAt
 
-users/{uid}/private/fcm
-  tokens: { [token]: { createdAt, userAgent } }
+users/{uid}
+  inviteToken                       // the invite this profile was created from
 
-invites/{inviteId}
+invites/{token}                     // the document id is the random token in the link
   email                             // lowercased
-  token                             // random, carried in the link
-  invitedBy, groupIds: string[]
-  status: 'pending' | 'accepted' | 'revoked' | 'expired'
+  invitedBy
+  status: 'pending' | 'accepted' | 'revoked'
   createdAt, expiresAt, acceptedAt?, acceptedBy?
 
 groups/{groupId}
   name, description, icon, color
   memberIds: string[]               // denormalised for queries and rules
+  formerMemberIds: string[]         // keeps a removed member's read access to their own completions
   weekStartsOn: 0 | 1               // 0 Sunday, 1 Monday
   weekStartLocked: boolean
   editWindowDays: number
@@ -71,7 +73,7 @@ groups/{groupId}/members/{uid}
   notifications: NotificationPrefs
 
 groups/{groupId}/taskVersions/{versionId}
-  taskId, version, replaces?
+  taskId, version, prevVersionId, replaces
   effectiveFrom: 'YYYY-MM-DD'
   effectiveTo: 'YYYY-MM-DD' | null
   name, description, icon, sortOrder                       // cosmetic
@@ -83,25 +85,18 @@ groups/{groupId}/taskVersions/{versionId}
   createdAt, createdBy
 
 groups/{groupId}/completions/{completionId}
-  userId, taskId, taskVersionId
+  userId, groupId, taskId, taskVersionId, taskName
   cadence, periodKey                // 'd:2026-10-15' | 'w:2026-10-12' | 'm:2026-10-01'
+  weekStartsOn                      // the group's setting at the time
   completedAt                       // informational
   loggedAt                          // server timestamp
   values: { [fieldKey]: value }
   note?
-  taskSnapshot                      // == taskVersion.snapshot plus weekStartsOn
+  taskSnapshot                      // == taskVersion.snapshot (map equality enforced by rules)
   deletedAt: Timestamp | null
 
-groups/{groupId}/summaries/{userId}_{taskId}_{YYYY-MM}
-  userId, taskId, month
-  completions, completionsAll       // counting, and including non-counting
-  periods: { [cadence]: { complete, missed } }
-  fields: { [key]: { sum, count, min, max } }
-  byDay: { [YYYY-MM-DD]: { count, values: { [key]: number } } }
-  updatedAt
-
 notifications/{uid}/items/{actorId}_{taskId}_{periodKey}
-  type, groupId, actorId, completionId, taskName, periodKey
+  type, groupId, actorId, actorName, taskId, taskName, completionId, periodKey
   createdAt, readAt: Timestamp | null
 ```
 
@@ -134,7 +129,6 @@ interface TaskTarget {
 
 interface NotificationPrefs {
   onMemberCompletion: { enabled: boolean; cadences: Cadence[]; taskIds: string[] | null }
-  channels: { push: boolean }
   quietHours?: { start: string; end: string }
 }
 ```
@@ -143,14 +137,13 @@ interface NotificationPrefs {
 
 | Screen | Query | Composite index |
 |--------|-------|-----------------|
-| My groups | groups where `memberIds` contains uid and `archivedAt` is null | memberIds, archivedAt |
+| My groups | groups where `memberIds` contains uid, ordered by name; archived filtered in the app | memberIds (contains), name |
 | Versions in effect for a date range | two queries, `effectiveTo == null` and `effectiveTo >= start`, both with `effectiveFrom <= end`, merged in the client | effectiveTo, effectiveFrom |
-| Today view | completions where `userId` is me, `periodKey` in the current day, week, and month keys, `deletedAt` null | userId, deletedAt, periodKey |
-| Period grid | completions where `periodKey` equals the key and `deletedAt` null | periodKey, deletedAt |
-| Activity feed | completions where `deletedAt` null, ordered by `loggedAt` descending, limit 50 | deletedAt, loggedAt |
-| My completions in a group I left | completions where `userId` is me, ordered by `periodKey` | userId, periodKey |
-| Stats and charts | summaries where `userId` and `taskId` match and `month` is in range | userId, taskId, month |
-| Rebuild one month | completions where `userId`, `taskId` match and `periodKey` is within the month, per cadence prefix | userId, taskId, periodKey |
+| Today view | completions where `userId` is me and `periodKey` in the current day, week, and month keys | userId, periodKey |
+| Period grid | completions where `periodKey` equals the key; soft-deleted filtered in the app | none (single field) |
+| Activity feed | completions ordered by `loggedAt` descending, limit 60; soft-deleted filtered in the app | none (single field) |
+| My history across groups | collection group `completions` where `userId` is me, ordered by `periodKey` | collection-group: userId, periodKey |
+| Stats and charts | completions where `taskId` matches, filtered by member and date range in the app | none (single field) |
 
 ## Access control
 
@@ -158,30 +151,18 @@ Rules read the caller's user doc for status and role, and the group doc for memb
 
 | Collection | Read | Write |
 |-----------|------|-------|
-| users | any active user | admin; or the owner, changing only timezone, display name, photo |
+| users | any active user, or the owner | create: the owner, only in the same batch that marks their invite accepted, with role `user`; update: admin (role, status, name), or the owner (timezone, display name, photo) |
 | users/private | owner | owner |
-| invites | admin | admin |
-| groups | member or admin | admin; `weekStartsOn` only while `weekStartLocked` is false |
+| invites | admin; or a signed-in user with a verified email equal to the invite's, for that one document | create: admin; update: admin to revoke, or the invitee to accept in the same batch that creates their profile |
+| groups | member, former member, or admin | admin; `weekStartsOn` only while `weekStartLocked` is false; a member may set `weekStartLocked` to true |
 | members | member or admin | admin; or the owner, changing only `notifications` |
-| taskVersions | member or admin | admin; a new version must keep every shared key's `fieldTypes` entry unchanged; an update may touch only cosmetic fields and `effectiveTo` |
-| completions | member, admin, or the completion's owner | create: member, `userId` is the caller, `taskSnapshot` equals the version's `snapshot`, `values` keys within `fieldKeys`, `periodKey` matches the key pattern, `completedAt` within `editWindowDays` plus two days of server time; update and delete: owner under the same time check and soft-delete only, or admin |
-| summaries | member or admin | functions only |
-| notifications/items | owner; update `readAt` only | functions only |
+| taskVersions | member, former member, or admin | admin; a new version must link `prevVersionId`, increment `version`, and keep every shared key's `fieldTypes` entry unchanged (`diff().changedKeys()` is empty); an update may touch only cosmetic fields, `effectiveTo`, and field labels |
+| completions | member, admin, or the completion's owner (also via collection group) | create: member, `userId` is the caller, `groupId` matches, `taskSnapshot` equals the version's `snapshot`, `values` keys within `fieldKeys`, `periodKey` matches the pattern and its prefix matches `cadence`, `weekStartsOn` matches the group, `completedAt` within `editWindowDays` plus two days of server time; update: owner under the same time check (values, note, soft-delete), or admin; hard delete never |
+| notifications/items | owner | create: an active member of the group, for another member of the same group, as themselves, with the deterministic id; update: owner, `readAt` only; delete: owner |
 
 Rules cannot loop over a field list or do timezone arithmetic, so three things are enforced only in the app: per-field type and range validation, the exact edit window in the member's timezone, and consistency between `periodKey` and `completedAt`. The rules bound them; the group is trusted for the rest.
 
 Rules tests should cover: an authenticated user with no account reads nothing; a member cannot write another member's completion; a snapshot differing from the version doc is rejected; an unknown value key is rejected; a completion dated a week ago is rejected; a non-admin cannot write a task version; a new version changing a field's type is rejected; week start cannot change once locked; a removed member reads their own completions but not the group.
-
-## Cloud Functions
-
-| Function | Trigger | Behaviour |
-|----------|---------|-----------|
-| `acceptInvite(token)` | callable | Checks the caller's email matches the invite (case-insensitive) and the invite is pending and unexpired. In one transaction creates `users/{uid}` with role `user` and the client's timezone, adds memberships and `memberIds`, marks the invite accepted. |
-| `onCompletionCreated` | completion created | Loads active members and preferences, drops the actor and anyone opted out of this cadence or task, applies quiet hours. Writes an inbox item with the deterministic id, so retries and undo-redo cycles produce one item. Sends FCM push with a visible notification payload to each enabled token, deleting tokens FCM reports as invalid. |
-| `onCompletionWritten` | completion created, updated, or deleted | Recomputes the summary for the member, task, and month of the period from raw completions in that month. Recomputing rather than incrementing keeps it idempotent and self-healing. Sets `weekStartLocked` on the first weekly completion. |
-| `rebuildSummaries(groupId?)` | callable, admin only | Regenerates every summary from raw completions. |
-| `onUserWritten` | user updated | Reverts a write that would leave zero active admins. Revokes refresh tokens when a user is deactivated. |
-| `scheduledReminders` | schedule (v2) | Per-timezone sweep for members with incomplete tasks and reminders enabled. |
 
 ## Frontend structure
 
@@ -198,7 +179,8 @@ Rules tests should cover: an authenticated user with no account reads nothing; a
 /groups/:id/stats            stats and charts
 /groups/:id/settings         my notification preferences for this group
 /inbox                       notifications
-/me                          profile, timezone, device push status
+/me                          profile, timezone, sign out
+/me/history                  my completions across groups
 /me/history                  my completions across groups, including ones I have left
 /admin/users                 users, invites, roles
 /admin/groups/:id            members and task editor
@@ -208,25 +190,23 @@ Guards: `requiresAuth`, `requiresActiveUser`, `requiresAdmin`.
 
 ### Stores and pure modules
 
-Pinia stores wrap VueFire bindings: auth and profile; groups, members, and task versions with a "versions in effect for a range" selector; completions for the active group and period with log and undo actions; summaries with derived stats and chart series; inbox and device token registration.
+Pinia stores wrap VueFire bindings: auth and profile; my groups and, for admins, all groups; the inbox with its unread count. Composables cover one group's document, roster, and task versions; one period's completions and in-effect tasks; the user's current date in their timezone; and logging, editing, and soft-deleting completions with inbox fan-out.
 
-Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, goal met); edit classification (cosmetic, measured, refused); stats and chart series from summaries, per cadence segment.
+Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, goal met); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
 
 ### Components
 
-The app shell switches between bottom tabs and a sidebar. A task row either toggles a checkbox or opens a bottom sheet that renders fields from the definition. The period grid is responsive. The task editor classifies the edit live and shows "applies now", "new version from <date>", or "not allowed, replace task instead". An icon picker browses Phosphor. A stats panel and trend chart read summaries.
+The app shell switches between bottom tabs and a sidebar. A task row either toggles a checkbox or opens a bottom sheet that renders fields from the definition. The period grid is responsive. The task editor classifies the edit live and shows "applies now", "new version from <date>", or "not allowed, replace task instead". An icon picker browses Phosphor. The stats view computes per-member stats and feeds three trend charts.
 
-## Push implementation
+## Inbox and badge
 
-- The service worker from `vite-plugin-pwa` imports the FCM messaging worker. Every push carries a visible notification payload; Safari may revoke permission for a web app that receives a push and shows nothing, so there are no data-only pushes.
-- Platform detection: iOS is identified from the user agent; "installed" is `display-mode: standalone`. In a Safari tab the settings screen shows Add to Home Screen steps and no permission button, since iOS cannot grant push there.
-- `Notification.requestPermission()` is called only from a tap. The resulting token is written to `users/{uid}/private/fcm`.
-- On every launch and on return to the foreground, the app requests the token again and updates the stored one if it changed. This heals iOS subscriptions that lapse.
-- The settings screen reads the current permission state and whether this device's token is stored, and shows subscribed, not subscribed, or denied.
+- When a completion is logged, the client computes recipients from the group's membership documents (enabled, cadence included, task included, not the actor, not left) and writes inbox items in batches of eight, since each write costs two rule reads and a batch may use at most twenty.
+- Fan-out is best effort after the completion commits; a failure never undoes the completion. A redo hits the create-only rule for already-notified recipients and fails quietly.
+- The inbox store watches unread items and calls the Badging API where available.
 
 ## Testing
 
 - Unit tests for every pure module, especially period maths across week starts, month boundaries, and timezones, and edit classification.
-- Rules tests as listed under Access control, run against the Firestore emulator.
-- Function tests against the emulator: invite acceptance paths, deterministic notification ids under undo and redo, summary recompute on create, edit, and soft delete.
+- Rules tests run inside the Firestore emulator via `firebase emulators:exec`.
+- Rules tests also cover the invite acceptance batch (wrong email, unverified, used, expired, profile without invite, invite without profile) and inbox writes (deterministic id, self, impersonation, non-member).
 - Playwright against emulators for the critical paths: invite and sign in, build each spec example task, log a day, change a task's cadence and confirm last month's grid and the miles chart are unchanged.

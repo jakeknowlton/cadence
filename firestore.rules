@@ -1,0 +1,265 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function authEmail() {
+      return request.auth.token.email.lower();
+    }
+    function emailVerified() {
+      return isSignedIn() && 'email' in request.auth.token && request.auth.token.email_verified == true;
+    }
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+    function hasProfile() {
+      return isSignedIn() && exists(userPath(request.auth.uid));
+    }
+    function profile() {
+      return get(userPath(request.auth.uid)).data;
+    }
+    function isActiveUser() {
+      return hasProfile() && profile().status == 'active';
+    }
+    function isAdmin() {
+      return isActiveUser() && profile().role == 'admin';
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function groupPath(gid) {
+      return /databases/$(database)/documents/groups/$(gid);
+    }
+    function groupData(gid) {
+      return get(groupPath(gid)).data;
+    }
+    function isMemberOf(gid) {
+      return isActiveUser() && request.auth.uid in groupData(gid).memberIds;
+    }
+    function isFormerMemberOf(gid) {
+      return isActiveUser() && request.auth.uid in groupData(gid).formerMemberIds;
+    }
+    function invitePath(token) {
+      return /databases/$(database)/documents/invites/$(token);
+    }
+    function versionPath(gid, vid) {
+      return /databases/$(database)/documents/groups/$(gid)/taskVersions/$(vid);
+    }
+    function isInvitee(inviteData) {
+      return emailVerified() && inviteData.email == authEmail();
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if isActiveUser() || isSelf(uid);
+
+      // Created only while accepting an invite, in the same batch that marks the invite accepted.
+      allow create: if isSelf(uid) && emailVerified()
+        && request.resource.data.keys().hasOnly(['email', 'displayName', 'photoURL', 'role', 'timezone', 'status', 'inviteToken', 'createdAt', 'updatedAt'])
+        && request.resource.data.email == authEmail()
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'active'
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 60
+        && request.resource.data.timezone is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.inviteToken is string
+        && get(invitePath(request.resource.data.inviteToken)).data.status == 'pending'
+        && get(invitePath(request.resource.data.inviteToken)).data.email == authEmail()
+        && get(invitePath(request.resource.data.inviteToken)).data.expiresAt > request.time
+        && getAfter(invitePath(request.resource.data.inviteToken)).data.status == 'accepted'
+        && getAfter(invitePath(request.resource.data.inviteToken)).data.acceptedBy == uid;
+
+      allow update: if
+        (isAdmin() && onlyChanged(['role', 'status', 'displayName', 'updatedAt'])
+          && request.resource.data.role in ['user', 'admin']
+          && request.resource.data.status in ['active', 'deactivated'])
+        || (isSelf(uid) && isActiveUser()
+          && onlyChanged(['displayName', 'photoURL', 'timezone', 'updatedAt'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 60
+          && request.resource.data.timezone is string);
+      allow delete: if false;
+
+      match /private/{doc} {
+        allow read, write: if isSelf(uid) && isActiveUser();
+      }
+    }
+
+    // ---------- invites (doc id is the token) ----------
+    match /invites/{token} {
+      allow get: if isAdmin() || isInvitee(resource.data);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && token.size() >= 16
+        && request.resource.data.keys().hasOnly(['email', 'invitedBy', 'status', 'createdAt', 'expiresAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email == request.resource.data.email.lower()
+        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && request.resource.data.invitedBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp;
+      allow update: if
+        // admin revokes
+        (isAdmin() && onlyChanged(['status']) && request.resource.data.status == 'revoked')
+        // invitee accepts, in the same batch that creates their profile
+        || (isInvitee(resource.data)
+          && resource.data.status == 'pending'
+          && resource.data.expiresAt > request.time
+          && onlyChanged(['status', 'acceptedAt', 'acceptedBy'])
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.acceptedBy == request.auth.uid
+          && request.resource.data.acceptedAt == request.time
+          && getAfter(userPath(request.auth.uid)).data.inviteToken == token);
+      allow delete: if false;
+    }
+
+    // ---------- groups ----------
+    match /groups/{gid} {
+      function member() {
+        return isActiveUser() && request.auth.uid in resource.data.memberIds;
+      }
+      function formerMember() {
+        return isActiveUser() && request.auth.uid in resource.data.formerMemberIds;
+      }
+      function validGroupShape(d) {
+        return d.name is string && d.name.size() > 0 && d.name.size() <= 80
+          && d.memberIds is list
+          && d.formerMemberIds is list
+          && d.weekStartsOn in [0, 1]
+          && d.weekStartLocked is bool
+          && d.editWindowDays is int
+          && d.editWindowDays >= 0
+          && d.editWindowDays <= 30;
+      }
+
+      allow read: if isAdmin() || member() || formerMember();
+      allow create: if isAdmin()
+        && validGroupShape(request.resource.data)
+        && request.resource.data.weekStartLocked == false
+        && request.resource.data.archivedAt == null
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if
+        (isAdmin()
+          && validGroupShape(request.resource.data)
+          && (request.resource.data.weekStartsOn == resource.data.weekStartsOn || resource.data.weekStartLocked == false)
+          && request.resource.data.weekStartLocked == resource.data.weekStartLocked
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt)
+        // a member locks the week start alongside the group's first weekly completion
+        || (member() && onlyChanged(['weekStartLocked']) && request.resource.data.weekStartLocked == true);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isAdmin() || isMemberOf(gid);
+        allow create: if isAdmin()
+          && request.resource.data.userId == uid
+          && request.resource.data.leftAt == null
+          && request.resource.data.joinedAt == request.time;
+        allow update: if isAdmin()
+          || (isSelf(uid) && isMemberOf(gid) && onlyChanged(['notifications']));
+        allow delete: if false;
+      }
+
+      match /taskVersions/{vid} {
+        function prev() {
+          return get(versionPath(gid, request.resource.data.prevVersionId)).data;
+        }
+        allow read: if isAdmin() || isMemberOf(gid) || isFormerMemberOf(gid);
+        allow create: if isAdmin()
+          && request.resource.data.taskId is string
+          && request.resource.data.version is int
+          && request.resource.data.effectiveFrom is string
+          && request.resource.data.fieldKeys is list
+          && request.resource.data.fieldTypes is map
+          && request.resource.data.snapshot is map
+          && request.resource.data.createdAt == request.time
+          && (
+            (request.resource.data.prevVersionId == null && request.resource.data.version == 1)
+            || (request.resource.data.prevVersionId is string
+              && prev().taskId == request.resource.data.taskId
+              && prev().version + 1 == request.resource.data.version
+              // a field's type|unit may never change within a task; fieldTypes is cumulative over the lineage
+              && request.resource.data.fieldTypes.diff(prev().fieldTypes).changedKeys().size() == 0
+              && request.resource.data.fieldTypes.keys().hasAll(prev().fieldTypes.keys()))
+          );
+        // cosmetic edits in place, closing a version, and label-only field edits
+        allow update: if isAdmin()
+          && onlyChanged(['name', 'description', 'icon', 'sortOrder', 'effectiveTo', 'fields', 'snapshot', 'updatedAt'])
+          && request.resource.data.snapshot.diff(resource.data.snapshot).affectedKeys().hasOnly(['fields']);
+        allow delete: if false;
+      }
+
+      match /completions/{cid} {
+        function version() {
+          return get(versionPath(gid, request.resource.data.taskVersionId)).data;
+        }
+        function group() {
+          return get(groupPath(gid)).data;
+        }
+        function withinWindow(ts) {
+          return ts is timestamp
+            && ts > request.time - duration.value(group().editWindowDays + 2, 'd')
+            && ts < request.time + duration.value(1, 'd');
+        }
+        allow read: if isAdmin() || isMemberOf(gid) || (isSignedIn() && resource.data.userId == request.auth.uid);
+        allow create: if isMemberOf(gid)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['userId', 'groupId', 'taskId', 'taskVersionId', 'taskName', 'cadence', 'periodKey', 'weekStartsOn', 'completedAt', 'loggedAt', 'values', 'note', 'taskSnapshot', 'deletedAt'])
+          && request.resource.data.groupId == gid
+          && version().taskId == request.resource.data.taskId
+          && request.resource.data.taskSnapshot == version().snapshot
+          && request.resource.data.cadence == request.resource.data.taskSnapshot.cadence
+          && request.resource.data.values is map
+          && request.resource.data.values.keys().hasOnly(version().fieldKeys)
+          && request.resource.data.periodKey.matches('^(d|w|m):[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.periodKey[0:1] == request.resource.data.cadence[0:1]
+          && request.resource.data.weekStartsOn == group().weekStartsOn
+          && withinWindow(request.resource.data.completedAt)
+          && request.resource.data.loggedAt == request.time
+          && request.resource.data.deletedAt == null;
+        allow update: if
+          (isMemberOf(gid)
+            && resource.data.userId == request.auth.uid
+            && onlyChanged(['values', 'note', 'completedAt', 'deletedAt', 'updatedAt'])
+            && request.resource.data.values.keys().hasOnly(version().fieldKeys)
+            && withinWindow(resource.data.completedAt)
+            && withinWindow(request.resource.data.completedAt))
+          || (isAdmin() && onlyChanged(['values', 'note', 'completedAt', 'deletedAt', 'updatedAt']));
+        allow delete: if false;
+      }
+    }
+
+    // A user's own completions across every group, for their history page.
+    match /{path=**}/completions/{cid} {
+      allow read: if isActiveUser() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- notifications (inbox; written by the completing member's client) ----------
+    match /notifications/{uid}/items/{id} {
+      allow read: if isSelf(uid) && isActiveUser();
+      allow create: if isActiveUser()
+        && uid != request.auth.uid
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['type', 'groupId', 'actorId', 'actorName', 'taskId', 'taskName', 'completionId', 'periodKey', 'createdAt', 'readAt'])
+        && request.resource.data.type == 'member_completion'
+        && request.auth.uid in groupData(request.resource.data.groupId).memberIds
+        && uid in groupData(request.resource.data.groupId).memberIds
+        && id == request.resource.data.actorId + '_' + request.resource.data.taskId + '_' + request.resource.data.periodKey
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.readAt == null;
+      allow update: if isSelf(uid) && onlyChanged(['readAt']);
+      allow delete: if isSelf(uid);
+    }
+  }
+}

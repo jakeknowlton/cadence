@@ -1,73 +1,63 @@
-# workout-group
+# Cadence
 
-This template should help get you started developing with Vue 3 in Vite.
+Invite-only group accountability app: a group defines daily, weekly, and monthly tasks, members check them off, and everyone sees everyone's progress. Lives at [cadence.jkn.dev](https://cadence.jkn.dev).
 
-## Recommended IDE Setup
+- [Product spec](docs/SPEC.md)
+- [Technical design](docs/DESIGN.md)
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Runs entirely on Firebase's free Spark plan: Auth, Firestore, and Hosting, with security rules as the only server-side logic. No Cloud Functions.
 
-## Recommended Browser Setup
+## Setup
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+Tool versions are pinned in `mise.toml`. With [mise](https://mise.jdx.dev) installed:
 
 ```sh
+mise install
 pnpm install
 ```
 
-### Compile and Hot-Reload for Development
+The Firestore emulator needs Java 11 or newer on the path.
+
+## Development
+
+Everything runs locally against the Firebase Emulator Suite; no cloud project is needed.
 
 ```sh
-pnpm dev
+pnpm dev:all      # emulators + Vite dev server (http://localhost:5173)
+pnpm emulators    # Auth + Firestore emulators only, UI at http://localhost:4000
 ```
 
-### Type-Check, Compile and Minify for Production
+First run:
+
+1. Open the app and sign in with Google. The emulator shows a fake account picker; add any account.
+2. You'll land on "You need an invite". Make that account the first admin:
+   ```sh
+   pnpm seed:admin you@example.com
+   ```
+3. Reload. The Admin tab appears: create a group, add yourself, add tasks, then invite a second fake account to test the invite flow.
+
+Vue devtools are off by default because their floating overlay covers the tab bar on a phone; start with `VITE_DEVTOOLS=1 pnpm dev` to enable them.
+
+Emulator data is exported to `emulator-data/` on exit and re-imported on the next start, so your groups and tasks survive restarts.
+
+## Checks
 
 ```sh
+pnpm lint         # oxlint + eslint
+pnpm type-check
+pnpm test:unit    # vitest
+pnpm test:rules   # Firestore security rules, runs inside the emulator
+pnpm test:e2e     # Playwright
 pnpm build
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+## Deploy
 
 ```sh
-pnpm test:unit
+pnpm deploy:dev    # cadence-jkn-dev → https://cadence-jkn-dev.web.app
+pnpm deploy:prod   # cadence-jkn-prod → https://cadence.jkn.dev
 ```
 
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
+Project aliases are in `.firebaserc` (default is dev). Environments: `.env.development` (emulators), `.env.staging` (dev project), `.env.production` (prod project). All committed; Firebase web config values are public identifiers, not secrets.
 
-```sh
-# Install browsers for the first run
-npx playwright install
-
-# When testing on CI, must build the project first
-pnpm build
-
-# Runs the end-to-end tests
-pnpm test:e2e
-# Runs the tests only on Chromium
-pnpm test:e2e --project=chromium
-# Runs the tests of a specific file
-pnpm test:e2e tests/example.spec.ts
-# Runs the tests in debug mode
-pnpm test:e2e --debug
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-pnpm lint
-```
+In production the first admin is created by hand: sign in once, then in the Firebase console create `users/{uid}` with `email`, `displayName`, `photoURL: null`, `role: "admin"`, `timezone`, `status: "active"`, `createdAt`, `updatedAt`.

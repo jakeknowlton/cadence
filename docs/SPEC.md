@@ -1,6 +1,6 @@
 # Cadence
 
-Product specification. Draft v0.4, planning only; nothing is built yet. How it is built is in [DESIGN.md](DESIGN.md). Decisions and their dates are in the appendix.
+Product specification. v0.5, built through the first local-testable release. How it is built is in [DESIGN.md](DESIGN.md). Decisions and their dates are in the appendix.
 
 ## Overview
 
@@ -18,7 +18,7 @@ The app lives at `cadence.jkn.dev`. The package and Firebase project are named `
 - Nothing is ever deleted. Changing a task never alters past data, and long-term stats remain meaningful across changes.
 - Members control their own notification preferences per group.
 - Mobile-first and installable as a web app on a phone.
-- Minimal operations. The app runs on Firebase with no separate server to maintain.
+- Minimal operations and zero hosting cost. The app runs on Firebase's free plan with no server-side code at all.
 
 ### Non-goals for v1
 
@@ -28,6 +28,7 @@ The app lives at `cadence.jkn.dev`. The package and Firebase project are named `
 - Hiding a member's logged values from the rest of their group. Everyone in a group sees everyone's data.
 - Excusing a member from a period. Missed means missed.
 - Email, for invites or notifications.
+- Push notifications. Sending a push needs a server; see Notifications for what the free-plan app does instead.
 
 ## Concepts
 
@@ -66,9 +67,9 @@ Admins are global, not per group. The last remaining admin cannot remove their o
 
 ## Accounts and invites
 
-An admin creates an invite for an email address and optionally picks groups the person should join. The app shows a link, which the admin copies and sends however they like. Invites are single-use and expire after 14 days. Admins can revoke an invite or copy its link again.
+An admin creates an invite for an email address. The app shows a link, which the admin copies and sends however they like. Group membership is added by the admin after the person has joined. Invites are single-use and expire after 14 days. Admins can revoke an invite or copy its link again.
 
-Opening the link lets the invitee sign in with Google or with a passwordless email link. The signed-in account's email must match the invite. If it does not, the invitee sees which address the invite was for, and the admin has a one-tap action to re-invite a different address. On success the account is created and any pre-assigned group memberships are applied.
+Opening the link lets the invitee sign in with Google or with a passwordless email link. The signed-in account's email must match the invite and be verified by the sign-in method. If it does not match, the invitee sees which address the invite was for and can sign out to try another. On success the account is created and the invite is marked used, in one atomic write that the access rules validate.
 
 Anyone who signs in without an accepted invite sees a "you need an invite" screen and can access nothing else. This is enforced by access rules, not only by the interface.
 
@@ -166,31 +167,20 @@ Charts are the primary way members see progress over time. Each chart shows one 
 - Completions over time: counting completions per bucket.
 - Completion rate over time: per month, per cadence segment.
 
-Stats and charts read monthly rollups maintained on the server rather than every raw completion, so they stay fast as history grows.
+Stats and charts are computed in the app from the completions of one task at a time, which at a group's scale is a few thousand records at most.
 
 ## Notifications
 
-For each group, a member chooses whether to be notified when another member completes a task, and can limit that to certain cadences or certain tasks. A member can set quiet hours in their own timezone.
+For each group, a member chooses whether to be notified when another member completes a task, and can limit that to certain cadences or certain tasks.
 
-Every notification appears in the in-app inbox. Members can also enable push notifications on each of their devices. A member is never notified of their own completions. Undoing a completion sends nothing, and redoing it does not send a second notification: at most one notification per member, task, and period. Editing a completion sends nothing.
+Every notification appears in the in-app inbox, and the Inbox tab and the installed app's icon show an unread count. A member is never notified of their own completions. Undoing a completion sends nothing, and redoing it does not send a second notification: at most one notification per member, task, and period. Editing a completion sends nothing.
 
-### Push on phones
-
-Push works on phones without a native app, with one difference between platforms.
-
-| Platform | What the member must do |
-|----------|-------------------------|
-| Android | Grant notification permission when asked. Works from a normal browser tab. |
-| iPhone and iPad (iOS 16.4 or later) | Add Cadence to the Home Screen from Safari's share menu first, then open it from the Home Screen and tap Enable notifications. A site open in a Safari tab cannot receive push. |
-
-The notification settings screen detects the situation and shows the right step: Home Screen instructions on an iPhone in a browser tab, an Enable notifications button once installed or on Android, and instructions for system settings if permission was denied. It also shows whether the current device is subscribed, because iOS subscriptions are known to lapse quietly. The app re-registers the device every time it opens, so a lapsed subscription heals the next time the member uses the app. The inbox is the guaranteed channel; push is best effort on top of it.
-
-Reminders such as "you have not logged X today" are a v2 idea.
+Notifications are written by the completing member's app directly into each recipient's inbox, under access rules that only allow this between members of the same group. There is no server, so nothing arrives while the app is closed; the inbox fills in when the member next opens the app. Push notifications would need a server to send them and are a possible later addition on a paid plan.
 
 ## Platform requirements
 
 - **Mobile-first.** Designed and built for a phone screen first; wider layouts are an enhancement. Navigation is a bottom tab bar (Today, Groups, Inbox, Me, and Admin for admins) that becomes a sidebar on wide screens. Tap targets are at least 44px, field entry uses a bottom sheet with a sticky primary button, and number fields bring up the numeric keyboard.
-- **Installable.** The app is a progressive web app from the first release: installable to the Home Screen, with icons and safe-area handling for notched phones.
+- **Installable.** The app is a progressive web app: installable to the Home Screen, with icons, safe-area handling for notched phones, and an unread badge on the icon where the platform supports it.
 - **Works offline.** The Today view loads instantly from cache, and a check-off made offline syncs when the connection returns.
 - **Dense views adapt.** The period grid shows one task or one member at a time on a phone and the full matrix on a wide screen. Charts are one per screen on a phone.
 - **Accessible.** Keyboard and screen-reader usable; no hover-only controls.
@@ -206,10 +196,10 @@ Each phase ends with something usable.
 | 2 Groups and tasks | Groups, membership, task editor with every field type and edit classification, versioning, replace task | Every task example works end to end; changing miles to kilometres is refused |
 | 3 Logging | Today view, check-off, field sheet, required counts, gating targets, edit window, offline | Members log daily and see the group grid |
 | 4 History, stats, charts | Period grid for past periods, activity feed, monthly rollups, stats, charts with version markers | Changing a task's cadence leaves last month's grid untouched and the miles chart continuous |
-| 5 Notifications | Preferences, inbox, push with platform-aware setup, quiet hours | A member gets exactly one push when another checks off a task, even after an undo and redo |
+| 5 Notifications | Preferences, inbox written by the completing member's app, unread badge | A member sees exactly one inbox item when another checks off a task, even after an undo and redo |
 | 6 Polish | Wide-screen layout, empty states, accessibility pass | The group uses it for a week without hitting a blocker |
 
-v2 ideas: reminders, daily digests, streak badges, CSV export, task templates, and an email channel only if iOS push proves unreliable in practice.
+v2 ideas: push notifications and reminders (both need a server, so a paid plan), streak badges, CSV export, task templates, pre-assigning groups on an invite.
 
 ## Appendix: decisions
 
@@ -231,10 +221,13 @@ All decided 15 October 2026 unless noted.
 | 12 | Week start locks once a group has any weekly completion. |
 | 13 | Periods are identified by cadence and first day; task effective ranges are plain dates. |
 | 14 | The edit window is measured in days, per group, default 2. |
-| 15 | Stats and charts read server-maintained monthly rollups. Firebase alone; no separate backend. |
+| 15 | Firebase alone; no separate backend. (Superseded in part by 22: no server-side code at all.) |
 | 16 | Charts and weekday-only daily tasks are v1 requirements. |
-| 17 | Push via web push on Android and iOS, with an onboarding flow for the iOS Home Screen requirement. The inbox is the guaranteed channel. |
+| 17 | The in-app inbox is the notification channel. (Push deferred by 22.) |
 | 18 | Period boundaries use the member's timezone, and the logged period is the record. |
 | 19 | Notifications fire once per member, task, and period, on creation only. |
 | 20 | Only admins change membership. Removed members keep access to their own completions. |
 | 21 | Access rules enforce identity, membership, and shape; the app enforces per-field validation and the exact edit window. |
+| 22 | Spark plan only, no Cloud Functions. Invite acceptance is a rules-validated client batch; the inbox is written by the completing member's app; stats are computed in the app from raw completions. Push notifications deferred. |
+| 23 | Invites no longer pre-assign groups; the admin adds members after they join. |
+| 24 | Sign-in is Google or email link. Email/password is not offered because it does not verify the address, which the invite check relies on. |

@@ -1,0 +1,75 @@
+import type { TaskSnapshot } from '@/types/group'
+import type { Completion, CompletionValues } from '@/types/completion'
+
+function present(v: unknown): boolean {
+  return v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && Number.isNaN(v))
+}
+
+export function missingRequiredFields(snapshot: TaskSnapshot, values: CompletionValues): string[] {
+  return snapshot.fields.filter((f) => f.required && !present(values[f.key])).map((f) => f.key)
+}
+
+/** true/false if the target can be evaluated, null if there is no target or the field is empty. */
+export function targetMet(snapshot: TaskSnapshot, values: CompletionValues): boolean | null {
+  const t = snapshot.target
+  if (!t) return null
+  const raw = values[t.fieldKey]
+  if (!present(raw) || typeof raw !== 'number') return null
+  switch (t.comparator) {
+    case '>=':
+      return raw >= t.value
+    case '<=':
+      return raw <= t.value
+    case '==':
+      return raw === t.value
+    case 'between':
+      return raw >= t.value && raw <= (t.valueMax ?? t.value)
+  }
+}
+
+/** A completion counts when required fields are present and, if the target gates, the target is met. */
+export function isCounting(snapshot: TaskSnapshot, values: CompletionValues): boolean {
+  if (missingRequiredFields(snapshot, values).length > 0) return false
+  if (snapshot.target?.gatesCompletion) return targetMet(snapshot, values) === true
+  return true
+}
+
+export interface PeriodStatus {
+  /** counting completions */
+  count: number
+  /** all non-deleted completions */
+  total: number
+  required: number
+  complete: boolean
+  /** badge: the latest completion's target result */
+  goalMet: boolean | null
+}
+
+export function periodStatus(snapshot: TaskSnapshot, completions: Completion[]): PeriodStatus {
+  const live = completions.filter((c) => !c.deletedAt)
+  const counting = live.filter((c) => isCounting(c.taskSnapshot, c.values))
+  const latest = live.reduce<Completion | null>(
+    (best, c) => (!best || c.completedAt.toMillis() > best.completedAt.toMillis() ? c : best),
+    null,
+  )
+  return {
+    count: counting.length,
+    total: live.length,
+    required: snapshot.requiredCount,
+    complete: counting.length >= snapshot.requiredCount,
+    goalMet: latest ? targetMet(latest.taskSnapshot, latest.values) : null,
+  }
+}
+
+export function formatValue(value: unknown, type: string, unit?: string): string {
+  if (!present(value)) return ''
+  if (type === 'duration' && typeof value === 'number') {
+    const h = Math.floor(value / 3600)
+    const m = Math.floor((value % 3600) / 60)
+    const s = Math.round(value % 60)
+    return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
+  }
+  if (type === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return unit ? `${value} ${unit}` : String(value)
+  return String(value)
+}

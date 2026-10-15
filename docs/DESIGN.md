@@ -36,7 +36,7 @@ If push notifications or scheduled reminders are ever wanted, the step up is the
 | Hosting | Firebase Hosting with custom domain `cadence.jkn.dev`, also added to Firebase Auth authorized domains |
 | Local dev | Firebase Emulator Suite: Auth, Firestore, Functions |
 | Tests | Vitest for units and rules (`@firebase/rules-unit-testing` inside the emulator), Playwright end to end |
-| CI | GitHub Actions: lint, type-check, unit, rules, and end-to-end tests on every push and PR; pushes to `main` deploy hosting, rules, and indexes to `cadence-jkn-dev` with a service account key held in a repository secret |
+| CI | GitHub Actions: lint, type-check, unit, rules, and end-to-end tests on every push and PR; pushes to `main` deploy hosting, rules, and indexes to `cadence-jkn-dev`. Version tags `vX.Y.Z` on `main` run the same checks, then wait for approval on the `production` environment (required reviewer, restricted to version tags) before deploying to `cadence-jkn-prod`. Each project has its own service account; the prod key is an environment secret. |
 
 ## Data model
 

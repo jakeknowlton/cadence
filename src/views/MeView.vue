@@ -51,6 +51,7 @@ async function signOut() {
   await authStore.signOut()
   router.replace({ name: 'login' })
 }
+const version = import.meta.env.VITE_APP_VERSION?.slice(0, 16) ?? 'local'
 const themeOptions: { value: ThemeChoice; label: string }[] = [
   { value: 'system', label: 'Auto' },
   { value: 'light', label: 'Light' },
@@ -105,8 +106,9 @@ const themeOptions: { value: ThemeChoice; label: string }[] = [
       </RouterLink>
     </template>
 
-    <div class="mt-8">
+    <div class="mt-8 flex items-center justify-between">
       <Button variant="outline" @click="signOut">Sign out</Button>
+      <span class="tabular text-xs text-muted-foreground">{{ version }}</span>
     </div>
   </section>
 </template>

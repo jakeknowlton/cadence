@@ -1,0 +1,42 @@
+name: Check
+
+# Shared by CI (dev) and Release (prod): full test suite, then a build for the given Vite mode.
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: Vite mode to build (staging or production)
+        type: string
+        required: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint:oxlint
+      - run: pnpm lint:eslint
+      - run: pnpm type-check
+      - run: pnpm test:unit
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm test:rules
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - run: pnpm build-only --mode ${{ inputs.mode }}
+        env:
+          VITE_APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ inputs.mode }}
+          path: dist
+          retention-days: 3

@@ -60,6 +60,24 @@ pnpm deploy:prod   # cadence-jkn-prod → https://cadence.jkn.dev
 
 Each deploy pushes hosting, Firestore rules, and indexes together.
 
+### Releasing to production
+
+Production deploys only from a version tag on `main`, and only after you approve it.
+
+```sh
+pnpm release patch   # or minor / major: bumps package.json, commits, tags vX.Y.Z, pushes
+```
+
+The tag starts the Release workflow (`.github/workflows/release.yml`). It checks that the tag is on `main` and matches `package.json`, runs the full test suite, builds with `.env.production`, then pauses on the `production` environment. Open the run under Actions, click **Review deployments**, and approve. It then deploys hosting, rules, and indexes to `cadence-jkn-prod`. The running version is shown at the bottom of the Me page.
+
+To roll back hosting, use Hosting, Release history, Rollback in the Firebase console. To roll back rules, check out the previous tag and run `pnpm exec firebase deploy --only firestore --project prod`.
+
+The deploy needs a service account key stored as an **environment** secret, so only the approved production job can read it. Create it as for dev below, but in `cadence-jkn-prod`, then:
+
+```sh
+gh secret set FIREBASE_SERVICE_ACCOUNT_PROD --env production --repo jakeknowlton/cadence < ~/Downloads/<key>.json && rm ~/Downloads/<key>.json
+```
+
 ### Continuous deployment to dev
 
 Every push to `main` runs lint, type-check, unit, rules, and end-to-end tests, then deploys to `cadence-jkn-dev` (`.github/workflows/ci.yml`). The deploy step needs a service account key in the repository secret `FIREBASE_SERVICE_ACCOUNT_DEV`; without it the step is skipped with a warning. One-time setup:

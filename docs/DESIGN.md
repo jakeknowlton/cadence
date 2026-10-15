@@ -30,7 +30,7 @@ If push notifications or scheduled reminders are ever wanted, the step up is the
 | Charts | `chart.js` via `vue-chartjs` |
 | Dates | `date-fns` and `date-fns-tz` |
 | Validation | `zod` schemas generated from task field definitions |
-| Auth | Firebase Auth: Google sign-in and email-link sign-in |
+| Auth | Firebase Auth: Google, and email and password with `sendEmailVerification`. Spark quotas: 1,000 verification and 150 password reset emails a day. |
 | Database | Cloud Firestore with offline persistence |
 | PWA | `vite-plugin-pwa` manifest and service worker; app badge via the Badging API |
 | Hosting | Firebase Hosting with custom domain `cadence.jkn.dev`, also added to Firebase Auth authorized domains |

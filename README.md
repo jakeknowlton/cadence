@@ -29,7 +29,7 @@ pnpm emulators    # Auth + Firestore emulators only, UI at http://localhost:4000
 
 First run:
 
-1. Open the app and sign in with Google. The emulator shows a fake account picker; add any account.
+1. Open the app and sign in with Google (the emulator shows a fake account picker), or create an email account. Emulator verification links are printed in the emulator log and listed in the Emulator UI under Authentication.
 2. You'll land on "You need an invite". Make that account the first admin:
    ```sh
    pnpm seed:admin you@example.com

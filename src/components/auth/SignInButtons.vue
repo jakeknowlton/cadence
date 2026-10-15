@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   GoogleAuthProvider,
-  isSignInWithEmailLink,
-  sendSignInLinkToEmail,
-  signInWithEmailLink,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
+  updateProfile,
 } from 'firebase/auth'
-import { PhEnvelopeSimple, PhGoogleLogo } from '@phosphor-icons/vue'
+import { PhGoogleLogo } from '@phosphor-icons/vue'
 import { auth } from '@/firebase'
 import { isValidEmail, normalizeEmail } from '@/lib/invites'
 import { Button } from '@/components/ui/button'
@@ -15,18 +17,36 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
-const props = defineProps<{
-  /** Where to land after sign-in; used as the email-link continue URL. */
-  continuePath: string
-}>()
+type Mode = 'signin' | 'signup' | 'reset'
+
+const props = withDefaults(
+  defineProps<{
+    /** Where the verification email's link returns to. */
+    continuePath: string
+    initialMode?: Mode
+  }>(),
+  { initialMode: 'signin' },
+)
 const emit = defineEmits<{ signedIn: [] }>()
 
-const EMAIL_KEY = 'cadence:emailForSignIn'
-
+const mode = ref<Mode>(props.initialMode)
+const name = ref('')
 const email = ref('')
+const password = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
-const linkSent = ref(false)
+const resetSent = ref(false)
+
+const MIN_PASSWORD = 8
+const submitLabel = computed(() =>
+  mode.value === 'signup' ? 'Create account' : mode.value === 'reset' ? 'Send reset email' : 'Sign in',
+)
+
+function setMode(next: Mode) {
+  mode.value = next
+  error.value = null
+  resetSent.value = false
+}
 
 async function withGoogle() {
   busy.value = true
@@ -41,44 +61,38 @@ async function withGoogle() {
   }
 }
 
-async function sendLink() {
+async function submit() {
   const addr = normalizeEmail(email.value)
   if (!isValidEmail(addr)) {
     error.value = 'Enter a valid email address.'
     return
   }
+  if (mode.value !== 'reset' && password.value.length < (mode.value === 'signup' ? MIN_PASSWORD : 1)) {
+    error.value = mode.value === 'signup' ? `Use at least ${MIN_PASSWORD} characters for your password.` : 'Enter your password.'
+    return
+  }
+  if (mode.value === 'signup' && !name.value.trim()) {
+    error.value = 'Enter your name.'
+    return
+  }
   busy.value = true
   error.value = null
   try {
-    await sendSignInLinkToEmail(auth, addr, {
-      url: `${location.origin}${props.continuePath}`,
-      handleCodeInApp: true,
-    })
-    localStorage.setItem(EMAIL_KEY, addr)
-    linkSent.value = true
-  } catch (e) {
-    error.value = messageFor(e)
-  } finally {
-    busy.value = false
-  }
-}
-
-/** Complete an email-link sign-in if the current URL is one. Returns true if a sign-in happened. */
-async function completeEmailLink(): Promise<boolean> {
-  if (!isSignInWithEmailLink(auth, location.href)) return false
-  let addr = localStorage.getItem(EMAIL_KEY)
-  if (!addr) addr = window.prompt('Confirm the email address this link was sent to') ?? ''
-  if (!addr) return false
-  busy.value = true
-  try {
-    await signInWithEmailLink(auth, normalizeEmail(addr), location.href)
-    localStorage.removeItem(EMAIL_KEY)
-    history.replaceState(null, '', location.pathname)
+    if (mode.value === 'reset') {
+      await sendPasswordResetEmail(auth, addr)
+      resetSent.value = true
+      return
+    }
+    if (mode.value === 'signup') {
+      const { user } = await createUserWithEmailAndPassword(auth, addr, password.value)
+      await updateProfile(user, { displayName: name.value.trim() })
+      await sendEmailVerification(user, { url: `${location.origin}${props.continuePath}` })
+    } else {
+      await signInWithEmailAndPassword(auth, addr, password.value)
+    }
     emit('signedIn')
-    return true
   } catch (e) {
     error.value = messageFor(e)
-    return false
   } finally {
     busy.value = false
   }
@@ -86,12 +100,26 @@ async function completeEmailLink(): Promise<boolean> {
 
 function messageFor(e: unknown): string {
   const code = (e as { code?: string }).code ?? ''
-  if (code === 'auth/popup-closed-by-user') return 'Sign-in was cancelled.'
-  if (code === 'auth/invalid-action-code') return 'This sign-in link is invalid or has expired.'
-  return (e as Error).message || 'Something went wrong.'
+  switch (code) {
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled.'
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'That email and password don’t match. Check them, or reset your password.'
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Sign in instead.'
+    case 'auth/weak-password':
+      return `Use at least ${MIN_PASSWORD} characters for your password.`
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes and try again.'
+    case 'auth/network-request-failed':
+      return 'No connection. Check your network and try again.'
+    default:
+      return (e as Error).message || 'Something went wrong. Try again.'
+  }
 }
-
-defineExpose({ completeEmailLink })
 </script>
 
 <template>
@@ -103,28 +131,56 @@ defineExpose({ completeEmailLink })
 
     <div class="flex items-center gap-3 text-sm text-muted-foreground">
       <span class="h-px flex-1 bg-border" />
-      or
+      or use email
       <span class="h-px flex-1 bg-border" />
     </div>
 
-    <form v-if="!linkSent" class="flex flex-col gap-3" @submit.prevent="sendLink">
+    <Alert v-if="resetSent">
+      <AlertDescription>
+        If an account exists for that address, a reset link is on its way. Follow it, then come back and sign in.
+      </AlertDescription>
+    </Alert>
+
+    <form v-else class="flex flex-col gap-3" novalidate @submit.prevent="submit">
+      <div v-if="mode === 'signup'" class="grid gap-1.5">
+        <Label for="name">Your name</Label>
+        <Input id="name" v-model="name" autocomplete="name" maxlength="60" placeholder="How the group sees you" />
+      </div>
       <div class="grid gap-1.5">
         <Label for="email">Email</Label>
         <Input id="email" v-model="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" />
       </div>
-      <Button type="submit" variant="secondary" size="lg" class="w-full" :disabled="busy">
-        <PhEnvelopeSimple :size="20" />
-        Email me a sign-in link
-      </Button>
+      <div v-if="mode !== 'reset'" class="grid gap-1.5">
+        <div class="flex items-baseline justify-between">
+          <Label for="password">Password</Label>
+          <button v-if="mode === 'signin'" type="button" class="text-sm text-muted-foreground underline-offset-4 hover:underline" @click="setMode('reset')">
+            Forgot password?
+          </button>
+        </div>
+        <Input
+          id="password"
+          v-model="password"
+          type="password"
+          :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'"
+          :placeholder="mode === 'signup' ? `At least ${MIN_PASSWORD} characters` : ''"
+        />
+      </div>
+      <Button type="submit" variant="secondary" size="lg" class="w-full" :disabled="busy">{{ submitLabel }}</Button>
     </form>
-    <Alert v-else>
-      <AlertDescription>
-        Check your email for a sign-in link. It works on this device or any other.
-      </AlertDescription>
-    </Alert>
 
     <Alert v-if="error" variant="destructive">
       <AlertDescription>{{ error }}</AlertDescription>
     </Alert>
+
+    <p class="text-center text-sm text-muted-foreground">
+      <template v-if="mode === 'signin'">
+        New here?
+        <button type="button" class="font-semibold text-foreground underline-offset-4 hover:underline" @click="setMode('signup')">Create an account</button>
+      </template>
+      <template v-else>
+        Already have an account?
+        <button type="button" class="font-semibold text-foreground underline-offset-4 hover:underline" @click="setMode('signin')">Sign in</button>
+      </template>
+    </p>
   </div>
 </template>

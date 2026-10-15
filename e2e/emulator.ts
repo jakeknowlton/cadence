@@ -42,3 +42,17 @@ export async function makeAdmin(uid: string, email: string) {
     }),
   })
 }
+
+/** Apply the Auth emulator's latest verification code for an address, as if the user clicked the email link. */
+export async function verifyEmailViaEmulator(email: string) {
+  const res = await fetch(`${AUTH}/emulator/v1/projects/${PROJECT}/oobCodes`, { headers: OWNER })
+  const { oobCodes } = (await res.json()) as { oobCodes: { email: string; requestType: string; oobCode: string }[] }
+  const code = oobCodes.filter((c) => c.email === email && c.requestType === 'VERIFY_EMAIL').at(-1)
+  if (!code) throw new Error(`no verification email sent to ${email}`)
+  const applied = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:update?key=any`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oobCode: code.oobCode }),
+  })
+  if (!applied.ok) throw new Error(`could not apply verification code: ${await applied.text()}`)
+}

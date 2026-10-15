@@ -69,7 +69,7 @@ Admins are global, not per group. The last remaining admin cannot remove their o
 
 An admin creates an invite for an email address. The app shows a link, which the admin copies and sends however they like. Group membership is added by the admin after the person has joined. Invites are single-use and expire after 14 days. Admins can revoke an invite or copy its link again.
 
-Opening the link lets the invitee sign in with Google or with a passwordless email link. The signed-in account's email must match the invite and be verified by the sign-in method. If it does not match, the invitee sees which address the invite was for and can sign out to try another. On success the account is created and the invite is marked used, in one atomic write that the access rules validate.
+Opening the link lets the invitee sign in with Google, or create an account with their email address and a password. Google accounts are already verified. An email account gets a verification email and must open its link before the invite can be accepted; the invite page waits on that step and can resend the email. Password reset is available from the sign-in screen. The signed-in account's email must match the invite and be verified. If it does not match, the invitee sees which address the invite was for and can sign out to try another. On success the account is created and the invite is marked used, in one atomic write that the access rules validate.
 
 Anyone who signs in without an accepted invite sees a "you need an invite" screen and can access nothing else. This is enforced by access rules, not only by the interface.
 
@@ -230,4 +230,4 @@ All decided 15 October 2026 unless noted.
 | 21 | Access rules enforce identity, membership, and shape; the app enforces per-field validation and the exact edit window. |
 | 22 | Spark plan only, no Cloud Functions. Invite acceptance is a rules-validated client batch; the inbox is written by the completing member's app; stats are computed in the app from raw completions. Push notifications deferred. |
 | 23 | Invites no longer pre-assign groups; the admin adds members after they join. |
-| 24 | Sign-in is Google or email link. Email/password is not offered because it does not verify the address, which the invite check relies on. |
+| 24 | Sign-in is Google, or email and password with a required verification email. Email link sign-in was dropped because the Spark plan allows only 5 such emails a day; verification emails allow 1,000. |

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SignInButtons from '@/components/auth/SignInButtons.vue'
 import CadenceMark from '@/components/brand/CadenceMark.vue'
@@ -8,16 +7,12 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const buttons = ref<InstanceType<typeof SignInButtons> | null>(null)
 const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
 
 async function afterSignIn() {
   await authStore.ready()
   router.replace(authStore.isActive ? redirect : { name: 'no-access' })
 }
-onMounted(async () => {
-  if (await buttons.value?.completeEmailLink()) await afterSignIn()
-})
 </script>
 
 <template>
@@ -29,7 +24,7 @@ onMounted(async () => {
         <p class="mt-2 max-w-[28ch] text-[1.05rem] text-muted-foreground">Keep the rhythm with your crew. Daily, weekly, monthly.</p>
       </div>
     </div>
-    <SignInButtons ref="buttons" :continue-path="`/login?redirect=${encodeURIComponent(redirect)}`" @signed-in="afterSignIn" />
+    <SignInButtons :continue-path="`/login?redirect=${encodeURIComponent(redirect)}`" @signed-in="afterSignIn" />
     <p class="text-sm text-muted-foreground">Cadence is invite-only. If someone sent you an invite link, open it to join.</p>
   </main>
 </template>

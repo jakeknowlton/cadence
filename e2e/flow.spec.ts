@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { makeAdmin, resetEmulators, signIn } from './emulator'
+import { makeAdmin, resetEmulators, signIn, verifyEmailViaEmulator } from './emulator'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(180_000)
@@ -101,8 +101,17 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.goto('/me')
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login/)
-  await signIn(page, FRIEND)
   await page.goto(new URL(link).pathname)
+  await page.getByLabel('Your name').fill('Friend')
+  await page.getByLabel('Email').fill(FRIEND)
+  await page.getByLabel('Password').fill('a-good-password')
+  await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByText('Check your email')).toBeVisible()
+  // Not verified yet: the invite must not be accepted.
+  await page.getByRole('button', { name: /I’ve verified my email/ }).click()
+  await expect(page.getByText(/Not verified yet/)).toBeVisible()
+  await verifyEmailViaEmulator(FRIEND)
+  await page.getByRole('button', { name: /I’ve verified my email/ }).click()
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText(/No groups yet/)).toBeVisible()
 

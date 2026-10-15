@@ -38,10 +38,12 @@ watch(
 )
 
 const CADENCES: { value: Cadence; label: string }[] = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
+  { value: 'daily', label: 'Every day' },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
 ]
+const PERIOD_NOUN: Record<Cadence, string> = { daily: 'day', weekly: 'week', monthly: 'month' }
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'number', label: 'Number' },
   { value: 'duration', label: 'Duration' },
@@ -60,9 +62,25 @@ const COMPARATORS = [
   { value: 'between', label: 'between' },
 ] as const
 
-const allDays = computed({
-  get: () => def.activeDays === null,
-  set: (v) => (def.activeDays = v ? null : [1, 2, 3, 4, 5]),
+const certainDays = computed({
+  get: () => def.activeDays !== null,
+  set: (v) => (def.activeDays = v ? [1, 2, 3, 4, 5] : null),
+})
+/** Plain-language summary of the schedule, so the three controls read as one idea. */
+const scheduleSummary = computed(() => {
+  const n = def.requiredCount
+  const times = n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`
+  if (def.cadence !== 'daily') return `${times[0]!.toUpperCase()}${times.slice(1)} every ${PERIOD_NOUN[def.cadence]}.`
+  const days = def.activeDays
+  let when = 'every day'
+  if (days && days.length < 7) {
+    const sorted = [...days].sort()
+    if (sorted.join() === '1,2,3,4,5') when = 'on weekdays'
+    else if (sorted.join() === '0,6') when = 'on weekends'
+    else if (sorted.length === 0) when = 'on no days yet'
+    else when = `on ${sorted.map((d) => WEEKDAY_NAMES[d]!.slice(0, 3)).join(', ')}`
+  }
+  return `${times[0]!.toUpperCase()}${times.slice(1)} a day, ${when}.`
 })
 function toggleDay(d: Weekday) {
   if (def.activeDays === null) return
@@ -210,21 +228,29 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
     </div>
 
     <div class="panel grid gap-5 p-4">
-    <div class="grid grid-cols-2 gap-3">
-      <div class="grid gap-1.5">
-        <Label for="task-cadence">Cadence</Label>
-        <NativeSelect id="task-cadence" v-model="def.cadence" :options="CADENCES" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="task-required">Times per period</Label>
-        <Input id="task-required" v-model.number="def.requiredCount" type="number" inputmode="numeric" min="1" step="1" />
-      </div>
+    <div>
+      <p class="text-base font-semibold">How often</p>
+      <p class="mt-1 text-sm text-muted-foreground">{{ scheduleSummary }}</p>
+    </div>
+    <div class="grid gap-1.5">
+      <Label for="task-cadence">Repeats</Label>
+      <NativeSelect id="task-cadence" v-model="def.cadence" :options="CADENCES" />
+    </div>
+    <div class="grid gap-1.5">
+      <Label for="task-required">Times per {{ PERIOD_NOUN[def.cadence] }}</Label>
+      <Input id="task-required" v-model.number="def.requiredCount" type="number" inputmode="numeric" min="1" step="1" class="max-w-32" />
+      <p class="text-sm text-muted-foreground">
+        How many check-offs it takes before the {{ PERIOD_NOUN[def.cadence] }} counts as done. Usually 1.
+      </p>
     </div>
 
-    <div v-if="def.cadence === 'daily'" class="grid gap-2">
-      <div class="flex items-center justify-between">
-        <Label for="task-alldays">Every day</Label>
-        <Switch id="task-alldays" :model-value="allDays" @update:model-value="allDays = $event" />
+    <div v-if="def.cadence === 'daily'" class="grid gap-3">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <Label for="task-certaindays">Only on certain days</Label>
+          <p class="text-sm text-muted-foreground">Skipped days don't count as missed.</p>
+        </div>
+        <Switch id="task-certaindays" :model-value="certainDays" @update:model-value="certainDays = $event" />
       </div>
       <div v-if="def.activeDays !== null" class="flex gap-1">
         <button

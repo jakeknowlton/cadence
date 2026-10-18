@@ -32,7 +32,7 @@ function when(c: Completion) {
     <li v-for="c in completions" :key="c.id" class="flex items-start gap-3 px-4 py-3">
       <component :is="iconFor(iconOf(c))" :size="20" class="mt-0.5 shrink-0 text-primary" />
       <div class="min-w-0 flex-1">
-        <div class="text-[0.95rem]"><span class="font-semibold">{{ nameOf(c.userId) }}</span> did {{ c.taskName }}</div>
+        <div class="text-[0.95rem]"><span class="font-semibold">{{ nameOf(c.userId) }}</span> completed {{ c.taskName }}</div>
         <div v-if="summary(c) || c.note" class="truncate text-sm text-muted-foreground">
           {{ summary(c) }}<template v-if="summary(c) && c.note">, </template><template v-if="c.note">“{{ c.note }}”</template>
         </div>

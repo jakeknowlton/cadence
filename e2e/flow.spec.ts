@@ -118,7 +118,7 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   // --- group page shows the grid and feed ---
   await page.getByRole('link', { name: 'Test Crew' }).first().click()
   await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
-  await expect(page.getByText(/Admin did Drink water/)).toBeVisible()
+  await expect(page.getByText(/Admin completed Drink water/)).toBeVisible()
 
   // --- stats show the admin's chart, formatted from the field types ---
   await page.goto('/')

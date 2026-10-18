@@ -6,16 +6,18 @@ import { useCollection } from 'vuefire'
 import { PhPlus, PhArrowLeft } from '@phosphor-icons/vue'
 import { db } from '@/firebase'
 import { useGroup, useProfiles } from '@/composables/useGroup'
+import { useAdminDelete, type Footprint } from '@/composables/useAdminDelete'
 import { iconFor } from '@/lib/icons'
 import { DEFAULT_PREFS } from '@/lib/notifications'
-import { isRetired } from '@/lib/versions'
+import { hasEnded } from '@/lib/versions'
 import { GROUP_COLORS } from '@/types/group'
 import type { UserProfile } from '@/types/user'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import ConfirmDialog from '@/components/layout/ConfirmDialog.vue'
 import NativeSelect from '@/components/ui/NativeSelect.vue'
 import IconPicker from '@/components/tasks/IconPicker.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
@@ -24,7 +26,9 @@ import { groupBar } from '@/lib/groupColor'
 const route = useRoute()
 const router = useRouter()
 const groupId = computed(() => String(route.params.id))
-const { group, members, activeMembers, latest, today } = useGroup(groupId)
+const { group, members, activeMembers, latest, today, isTaskArchived } = useGroup(groupId, { includeArchived: true })
+const liveTasks = computed(() => latest.value.filter((v) => !isTaskArchived(v.taskId)))
+const archivedTasks = computed(() => latest.value.filter((v) => isTaskArchived(v.taskId)))
 const { nameOf } = useProfiles(() => activeMembers.value.map((m) => m.userId))
 
 type Tab = 'tasks' | 'members' | 'settings'
@@ -50,8 +54,45 @@ async function saveSettings() {
     saving.value = false
   }
 }
+// ---- archive and delete ----
+const confirmArchive = ref(false)
+const confirmDelete = ref(false)
+const busy = ref(false)
+const actionError = ref<string | null>(null)
+const footprint = ref<Footprint | null>(null)
+const { groupFootprint, deleteGroup } = useAdminDelete()
+
 async function setArchived(archived: boolean) {
-  await updateDoc(doc(db, 'groups', groupId.value), { archivedAt: archived ? serverTimestamp() : null })
+  busy.value = true
+  actionError.value = null
+  try {
+    await updateDoc(doc(db, 'groups', groupId.value), { archivedAt: archived ? serverTimestamp() : null })
+    confirmArchive.value = false
+  } catch (e) {
+    actionError.value = (e as Error).message
+  } finally {
+    busy.value = false
+  }
+}
+async function askDelete() {
+  actionError.value = null
+  footprint.value = null
+  confirmDelete.value = true
+  footprint.value = await groupFootprint(groupId.value)
+}
+async function remove() {
+  if (!group.value) return
+  busy.value = true
+  actionError.value = null
+  try {
+    await deleteGroup(group.value)
+    confirmDelete.value = false
+    router.push({ name: 'admin-groups' })
+  } catch (e) {
+    actionError.value = (e as Error).message
+  } finally {
+    busy.value = false
+  }
 }
 
 // ---- members ----
@@ -96,6 +137,13 @@ async function removeMember(uid: string) {
       <Badge v-if="group.archivedAt" variant="outline">Archived</Badge>
     </div>
 
+    <Alert v-if="group?.archivedAt" class="mt-4">
+      <AlertDescription class="flex flex-wrap items-center justify-between gap-3">
+        <span>Archived. Members can’t see this group, its tasks, or its history.</span>
+        <Button size="sm" :disabled="busy" @click="setArchived(false)">Restore group</Button>
+      </AlertDescription>
+    </Alert>
+
     <SegmentedControl v-model="tab" class="mt-4" :options="[{ value: 'tasks', label: 'Tasks' }, { value: 'members', label: 'Members' }, { value: 'settings', label: 'Settings' }]" label="Group admin" grow />
 
     <!-- Tasks -->
@@ -105,29 +153,40 @@ async function removeMember(uid: string) {
           <PhPlus :size="16" weight="bold" /> New task
         </Button>
       </div>
-      <p v-if="latest.length === 0" class="mt-3 text-sm text-muted-foreground">No tasks yet. Add the first one with the button above.</p>
-      <ul v-else class="panel row-list mt-3 overflow-hidden">
-        <li v-for="v in latest" :key="v.taskId">
-          <RouterLink
-            :to="{ name: 'admin-task-edit', params: { id: groupId, taskId: v.taskId } }"
-            class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50"
-            :class="isRetired(v, today) ? 'opacity-60' : ''"
-          >
-            <component :is="iconFor(v.icon)" :size="22" class="text-muted-foreground" />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="truncate font-medium">{{ v.name }}</span>
-                <Badge v-if="isRetired(v, today)" variant="outline">Retired</Badge>
-                <Badge v-else-if="v.effectiveFrom > today" variant="secondary">From {{ v.effectiveFrom }}</Badge>
-              </div>
-              <div class="text-sm text-muted-foreground">
-                <span class="capitalize">{{ v.cadence }}</span><span v-if="v.requiredCount > 1">, {{ v.requiredCount }} times</span>,
-                {{ v.completionType === 'checkbox' ? 'check-off' : `${v.fields.length} field${v.fields.length === 1 ? '' : 's'}` }}<span v-if="v.version > 1">, version {{ v.version }}</span>
-              </div>
-            </div>
-          </RouterLink>
-        </li>
-      </ul>
+      <p v-if="liveTasks.length === 0" class="mt-3 text-sm text-muted-foreground">
+        {{ archivedTasks.length ? 'No active tasks.' : 'No tasks yet.' }} Add one with the button above.
+      </p>
+      <template v-for="section in [{ key: 'live', tasks: liveTasks }, { key: 'archived', tasks: archivedTasks }]" :key="section.key">
+        <template v-if="section.tasks.length">
+          <div v-if="section.key === 'archived'" class="mt-6">
+            <h2 class="text-base font-semibold">Archived</h2>
+            <p class="text-sm text-muted-foreground">Hidden from members. Open one to restore or delete it.</p>
+          </div>
+          <ul class="panel row-list mt-3 overflow-hidden">
+            <li v-for="v in section.tasks" :key="v.taskId">
+              <RouterLink
+                :to="{ name: 'admin-task-edit', params: { id: groupId, taskId: v.taskId } }"
+                class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50"
+                :class="section.key === 'archived' || hasEnded(v, today) ? 'opacity-60' : ''"
+              >
+                <component :is="iconFor(v.icon)" :size="22" class="text-muted-foreground" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="truncate font-medium">{{ v.name }}</span>
+                    <Badge v-if="section.key === 'archived'" variant="outline">Archived</Badge>
+                    <Badge v-else-if="hasEnded(v, today)" variant="outline">Ended</Badge>
+                    <Badge v-else-if="v.effectiveFrom > today" variant="secondary">From {{ v.effectiveFrom }}</Badge>
+                  </div>
+                  <div class="text-sm text-muted-foreground">
+                    <span class="capitalize">{{ v.cadence }}</span><span v-if="v.requiredCount > 1">, {{ v.requiredCount }} times</span>,
+                    {{ v.completionType === 'checkbox' ? 'check-off' : `${v.fields.length} field${v.fields.length === 1 ? '' : 's'}` }}<span v-if="v.version > 1">, version {{ v.version }}</span>
+                  </div>
+                </div>
+              </RouterLink>
+            </li>
+          </ul>
+        </template>
+      </template>
     </div>
 
     <!-- Members -->
@@ -176,13 +235,53 @@ async function removeMember(uid: string) {
       </div>
       <Button type="submit" :disabled="saving">Save changes</Button>
 
-      <div class="mt-2 flex items-center justify-between border-t border-border pt-5">
-        <div>
-          <Label for="g-archived">Archived</Label>
-          <p class="text-sm text-muted-foreground">Read-only and hidden from members’ lists.</p>
-        </div>
-        <Switch id="g-archived" :model-value="!!group.archivedAt" @update:model-value="setArchived($event)" />
-      </div>
     </form>
+
+    <div v-if="tab === 'settings' && group" class="mt-8">
+      <h2 class="text-xl">Archive or delete</h2>
+      <div class="panel row-list mt-3 overflow-hidden">
+        <div class="flex items-center justify-between gap-4 px-4 py-3">
+          <div>
+            <p class="font-medium">{{ group.archivedAt ? 'Restore group' : 'Archive group' }}</p>
+            <p class="text-sm text-muted-foreground">
+              {{ group.archivedAt ? 'Show it to members again, with its history.' : 'Hide it from every member right away. History is kept and you can restore it.' }}
+            </p>
+          </div>
+          <Button v-if="group.archivedAt" variant="outline" :disabled="busy" @click="setArchived(false)">Restore</Button>
+          <Button v-else variant="outline" @click="confirmArchive = true">Archive</Button>
+        </div>
+        <div class="flex items-center justify-between gap-4 px-4 py-3">
+          <div>
+            <p class="font-medium">Delete group</p>
+            <p class="text-sm text-muted-foreground">Remove the group, its tasks, members list, and everything logged. Can’t be undone.</p>
+          </div>
+          <Button variant="destructive" @click="askDelete">Delete</Button>
+        </div>
+      </div>
+    </div>
+
+    <ConfirmDialog v-if="group" v-model:open="confirmArchive" :title="`Archive ${group.name}?`" confirm-label="Archive group" :busy="busy" :error="actionError" @confirm="setArchived(true)">
+      <p>It disappears for every member right away: Today, the Groups list, history, stats, and alerts.</p>
+      <p>Its history is kept, and you can restore it from the Archived section of Groups.</p>
+    </ConfirmDialog>
+    <ConfirmDialog
+      v-if="group"
+      v-model:open="confirmDelete"
+      :title="`Delete ${group.name}?`"
+      confirm-label="Delete forever"
+      destructive
+      :confirm-text="group.name"
+      :busy="busy"
+      :error="actionError"
+      @confirm="remove"
+    >
+      <p v-if="footprint">
+        This permanently deletes the group, its {{ footprint.tasks }} task{{ footprint.tasks === 1 ? '' : 's' }}, its member list,
+        all {{ footprint.completions }} completion{{ footprint.completions === 1 ? '' : 's' }} from {{ footprint.loggers }} member{{ footprint.loggers === 1 ? '' : 's' }},
+        and the alerts about them.
+      </p>
+      <p v-else>Counting what will be deleted…</p>
+      <p class="font-semibold text-foreground">This can’t be undone. To keep the history, archive the group instead.</p>
+    </ConfirmDialog>
   </section>
 </template>

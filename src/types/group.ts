@@ -13,6 +13,8 @@ export interface Group {
   weekStartLocked: boolean
   editWindowDays: number
   archivedAt: Timestamp | null
+  /** Archived tasks: hidden from every member view, kept for admins to restore or delete. Missing on older groups. */
+  archivedTaskIds?: string[]
   createdAt: Timestamp
   createdBy: string
 }
@@ -46,7 +48,7 @@ export interface TaskVersionDoc extends Omit<TaskDefinition, 'target'> {
   taskId: string
   version: number
   prevVersionId: string | null
-  /** taskId of a retired task this one replaced, display only */
+  /** taskId of the task this one replaced, display only */
   replaces: string | null
   effectiveFrom: string
   effectiveTo: string | null

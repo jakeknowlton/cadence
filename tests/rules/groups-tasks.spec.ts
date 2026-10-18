@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
-import { Timestamp, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore'
+import { Timestamp, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, deleteDoc, arrayUnion } from 'firebase/firestore'
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { assertFails, assertSucceeds, createTestEnv } from './setup'
-import { ADMIN, GROUP, MEMBER, OTHER, STRANGER, asUser, group, member, seedWorld, version } from './helpers'
+import { ADMIN, GROUP, MEMBER, OTHER, STRANGER, asUser, completion, group, member, seedWorld, version } from './helpers'
 
 let env: RulesTestEnvironment
 beforeAll(async () => {
@@ -112,5 +112,31 @@ describe('task versions', () => {
     await assertFails(updateDoc(ref, { requiredCount: 2 }))
     await assertFails(updateDoc(ref, { 'snapshot.cadence': 'weekly' }))
     await assertFails(updateDoc(ref, { fieldTypes: { miles: 'number|km' } }))
+  })
+})
+
+describe('archive and delete', () => {
+  it('admins archive tasks by id; the list must be a list', async () => {
+    const db = asUser(env, ADMIN)
+    await assertSucceeds(updateDoc(doc(db, 'groups', GROUP), { archivedTaskIds: arrayUnion('run') }))
+    await assertFails(updateDoc(doc(db, 'groups', GROUP), { archivedTaskIds: 'run' }))
+    await assertFails(updateDoc(doc(asUser(env, MEMBER), 'groups', GROUP), { archivedTaskIds: arrayUnion('run') }))
+  })
+
+  it('only admins hard-delete a group and everything under it', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'groups', GROUP, 'completions', 'c1'), completion(MEMBER))
+    })
+    const m = asUser(env, MEMBER)
+    await assertFails(deleteDoc(doc(m, 'groups', GROUP, 'completions', 'c1')))
+    await assertFails(deleteDoc(doc(m, 'groups', GROUP, 'taskVersions', 'v1')))
+    await assertFails(deleteDoc(doc(m, 'groups', GROUP, 'members', MEMBER)))
+    await assertFails(deleteDoc(doc(m, 'groups', GROUP)))
+
+    const a = asUser(env, ADMIN)
+    await assertSucceeds(deleteDoc(doc(a, 'groups', GROUP, 'completions', 'c1')))
+    await assertSucceeds(deleteDoc(doc(a, 'groups', GROUP, 'taskVersions', 'v1')))
+    await assertSucceeds(deleteDoc(doc(a, 'groups', GROUP, 'members', MEMBER)))
+    await assertSucceeds(deleteDoc(doc(a, 'groups', GROUP)))
   })
 })

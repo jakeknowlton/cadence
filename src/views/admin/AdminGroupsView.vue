@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { PhPlus } from '@phosphor-icons/vue'
@@ -20,6 +20,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 const groupsStore = useGroupsStore()
 
+const liveGroups = computed(() => groupsStore.adminGroups.filter((g) => !g.archivedAt))
+const archivedGroups = computed(() => groupsStore.adminGroups.filter((g) => g.archivedAt))
+
 const open = ref(false)
 const name = ref('')
 const creating = ref(false)
@@ -39,6 +42,7 @@ async function create() {
       weekStartLocked: false,
       editWindowDays: 2,
       archivedAt: null,
+      archivedTaskIds: [],
       createdAt: serverTimestamp(),
       createdBy: authStore.uid,
     })
@@ -62,21 +66,31 @@ async function create() {
     <AdminNav class="mt-4" />
 
     <p v-if="groupsStore.adminGroups.length === 0" class="mt-4 text-sm text-muted-foreground">No groups yet. Create one, then add members and tasks.</p>
-    <ul v-else class="panel row-list mt-4 overflow-hidden">
-      <li v-for="g in groupsStore.adminGroups" :key="g.id">
-        <RouterLink :to="{ name: 'admin-group', params: { id: g.id } }" class="flex items-center gap-3 py-3 pr-4 transition-colors hover:bg-accent/50">
-          <span class="h-9 w-1.5 rounded-r-full" :class="groupBar(g.color)" />
-          <component :is="iconFor(g.icon)" :size="24" class="text-muted-foreground" />
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="truncate font-medium">{{ g.name }}</span>
-              <Badge v-if="g.archivedAt" variant="outline">Archived</Badge>
+    <template v-for="section in [{ key: 'live', groups: liveGroups }, { key: 'archived', groups: archivedGroups }]" :key="section.key">
+      <div v-if="section.key === 'archived' && section.groups.length" class="mt-6">
+        <h2 class="text-base font-semibold">Archived</h2>
+        <p class="text-sm text-muted-foreground">Hidden from members. Open one to restore or delete it.</p>
+      </div>
+      <ul v-if="section.groups.length" class="panel row-list mt-4 overflow-hidden">
+        <li v-for="g in section.groups" :key="g.id">
+          <RouterLink
+            :to="{ name: 'admin-group', params: { id: g.id } }"
+            class="flex items-center gap-3 py-3 pr-4 transition-colors hover:bg-accent/50"
+            :class="g.archivedAt ? 'opacity-60' : ''"
+          >
+            <span class="h-9 w-1.5 rounded-r-full" :class="groupBar(g.color)" />
+            <component :is="iconFor(g.icon)" :size="24" class="text-muted-foreground" />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="truncate font-medium">{{ g.name }}</span>
+                <Badge v-if="g.archivedAt" variant="outline">Archived</Badge>
+              </div>
+              <div class="text-sm text-muted-foreground">{{ g.memberIds.length }} member{{ g.memberIds.length === 1 ? '' : 's' }}</div>
             </div>
-            <div class="text-sm text-muted-foreground">{{ g.memberIds.length }} member{{ g.memberIds.length === 1 ? '' : 's' }}</div>
-          </div>
-        </RouterLink>
-      </li>
-    </ul>
+          </RouterLink>
+        </li>
+      </ul>
+    </template>
 
     <Dialog v-model:open="open">
       <DialogContent>

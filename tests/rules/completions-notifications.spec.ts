@@ -99,7 +99,7 @@ describe('notifications', () => {
     await assertFails(setDoc(doc(db, 'notifications', OTHER, 'items', ID), item(MEMBER)))
   })
 
-  it('only the recipient reads, marks read, or deletes', async () => {
+  it('only the recipient reads, marks read, or deletes (admins may read and delete to clean up)', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'notifications', OTHER, 'items', ID), { ...item(MEMBER), createdAt: Timestamp.now() })
     })
@@ -110,5 +110,15 @@ describe('notifications', () => {
     await assertFails(updateDoc(doc(theirs, 'notifications', OTHER, 'items', ID), { taskName: 'x' }))
     await assertFails(deleteDoc(doc(asUser(env, MEMBER), 'notifications', OTHER, 'items', ID)))
     await assertSucceeds(deleteDoc(doc(theirs, 'notifications', OTHER, 'items', ID)))
+  })
+
+  it('an admin finds and deletes inbox items when deleting a task or group, but cannot edit them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', OTHER, 'items', ID), { ...item(MEMBER), createdAt: Timestamp.now() })
+    })
+    const admin = asUser(env, ADMIN)
+    await assertSucceeds(getDocs(query(collection(admin, 'notifications', OTHER, 'items'), where('groupId', '==', GROUP), where('taskId', '==', 'run'))))
+    await assertFails(updateDoc(doc(admin, 'notifications', OTHER, 'items', ID), { readAt: serverTimestamp() }))
+    await assertSucceeds(deleteDoc(doc(admin, 'notifications', OTHER, 'items', ID)))
   })
 })

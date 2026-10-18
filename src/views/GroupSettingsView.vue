@@ -9,6 +9,7 @@ import type { Cadence } from '@/types/task'
 import type { NotificationPrefs } from '@/types/group'
 import { DEFAULT_PREFS } from '@/lib/notifications'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -16,7 +17,7 @@ import { Switch } from '@/components/ui/switch'
 const route = useRoute()
 const authStore = useAuthStore()
 const groupId = computed(() => String(route.params.id))
-const { group, members, latest, today } = useGroup(groupId)
+const { group, members, latest, today, hidden } = useGroup(groupId)
 
 const mine = computed(() => members.value.find((m) => m.id === authStore.uid) ?? null)
 const prefs = ref<NotificationPrefs>(structuredClone(DEFAULT_PREFS))
@@ -62,9 +63,10 @@ async function save() {
 
 <template>
   <section class="mx-auto max-w-2xl px-4 pt-6 pb-8">
-    <GroupHeader v-if="group" :group="group" current="settings" />
+    <EmptyState v-if="hidden" title="This group isn’t available" body="An admin has archived it." />
+    <GroupHeader v-else-if="group" :group="group" current="settings" />
 
-    <form v-if="group && mine" class="mt-6 grid gap-4" @submit.prevent="save">
+    <form v-if="group && mine && !hidden" class="mt-6 grid gap-4" @submit.prevent="save">
       <div class="panel flex items-center justify-between gap-4 p-4">
         <div>
           <Label for="n-enabled" class="text-base font-semibold">Tell me when someone completes a task</Label>

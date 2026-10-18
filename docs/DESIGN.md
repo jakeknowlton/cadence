@@ -65,6 +65,7 @@ groups/{groupId}
   weekStartLocked: boolean
   editWindowDays: number
   archivedAt: Timestamp | null
+  archivedTaskIds: string[]         // archived tasks, hidden from members; may be missing on older groups
   createdAt, createdBy
 
 groups/{groupId}/members/{uid}
@@ -153,11 +154,11 @@ Rules read the caller's user doc for status and role, and the group doc for memb
 | users | any active user, or the owner | create: the owner, only in the same batch that marks their invite accepted, with role `user`; update: admin (role, status, name), or the owner (timezone, display name, photo) |
 | users/private | owner | owner |
 | invites | admin; or a signed-in user with a verified email equal to the invite's, for that one document | create: admin; update: admin to revoke, or the invitee to accept in the same batch that creates their profile |
-| groups | member, former member, or admin | admin; `weekStartsOn` only while `weekStartLocked` is false; a member may set `weekStartLocked` to true |
-| members | member or admin | admin; or the owner, changing only `notifications` |
-| taskVersions | member, former member, or admin | admin; a new version must link `prevVersionId`, increment `version`, and keep every shared key's `fieldTypes` entry unchanged (`diff().changedKeys()` is empty); an update may touch only cosmetic fields, `effectiveTo`, and field labels |
-| completions | member, admin, or the completion's owner (also via collection group) | create: member, `userId` is the caller, `groupId` matches, `taskSnapshot` equals the version's `snapshot`, `values` keys within `fieldKeys`, `periodKey` matches the pattern and its prefix matches `cadence`, `weekStartsOn` matches the group, `completedAt` within `editWindowDays` plus two days of server time; update: owner under the same time check (values, note, soft-delete), or admin; hard delete never |
-| notifications/items | owner | create: an active member of the group, for another member of the same group, as themselves, with the deterministic id; update: owner, `readAt` only; delete: owner |
+| groups | member, former member, or admin | admin; `weekStartsOn` only while `weekStartLocked` is false; `archivedTaskIds` a list; a member may set `weekStartLocked` to true; delete: admin |
+| members | member or admin | admin; or the owner, changing only `notifications`; delete: admin |
+| taskVersions | member, former member, or admin | admin; a new version must link `prevVersionId`, increment `version`, and keep every shared key's `fieldTypes` entry unchanged (`diff().changedKeys()` is empty); an update may touch only cosmetic fields, `effectiveTo`, and field labels; delete: admin |
+| completions | member, admin, or the completion's owner (also via collection group) | create: member, `userId` is the caller, `groupId` matches, `taskSnapshot` equals the version's `snapshot`, `values` keys within `fieldKeys`, `periodKey` matches the pattern and its prefix matches `cadence`, `weekStartsOn` matches the group, `completedAt` within `editWindowDays` plus two days of server time; update: owner under the same time check (values, note, soft-delete), or admin; hard delete: admin only, when deleting a task or group |
+| notifications/items | owner, or admin (to clean up a delete) | create: an active member of the group, for another member of the same group, as themselves, with the deterministic id; update: owner, `readAt` only; delete: owner or admin |
 
 Rules cannot loop over a field list or do timezone arithmetic, so three things are enforced only in the app: per-field type and range validation, the exact edit window in the member's timezone, and consistency between `periodKey` and `completedAt`. The rules bound them; the group is trusted for the rest.
 
@@ -189,7 +190,9 @@ Guards: `requiresAuth`, `requiresActiveUser`, `requiresAdmin`.
 
 ### Stores and pure modules
 
-Pinia stores wrap VueFire bindings: auth and profile; my groups and, for admins, all groups; the inbox with its unread count. Composables cover one group's document, roster, and task versions; one period's completions and in-effect tasks; the user's current date in their timezone; and logging, editing, and soft-deleting completions with inbox fan-out.
+Pinia stores wrap VueFire bindings: auth and profile; my groups and, for admins, all groups; the inbox with its unread count. Composables cover one group's document, roster, and task versions; one period's completions and in-effect tasks; the user's current date in their timezone; and logging, editing, and soft-deleting completions with inbox fan-out; and admin deletes of a task or group.
+
+Archived groups and tasks are hidden in the app, not by the rules: `useGroup` drops archived tasks unless an admin screen asks for them, member group pages show an empty state for an archived group, and the groups store's `isHidden` filters personal history and the inbox. Hard deletes run from the admin's browser in batches of at most 400 writes. They are not atomic, so the parent document is deleted last and a failed delete can simply be run again.
 
 Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, one-tap defaults); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
 

@@ -10,6 +10,7 @@ import { localDate, shiftDays } from '@/lib/periods'
 import { computeStats, rateSeries, valueSeries, type Bucket } from '@/lib/stats'
 import { formatValue } from '@/lib/completionStatus'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import TrendChart from '@/components/groups/TrendChart.vue'
 import NativeSelect from '@/components/ui/NativeSelect.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.id))
-const { group, members, latest, versions, today, activeMembers } = useGroup(groupId)
+const { group, members, latest, versions, today, activeMembers, hidden } = useGroup(groupId)
 const { nameOf } = useProfiles(() => members.value.map((m) => m.userId))
 
 const taskId = ref('')
@@ -77,8 +78,9 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
 
 <template>
   <section class="mx-auto max-w-3xl px-4 pt-6 pb-8">
-    <GroupHeader v-if="group" :group="group" current="stats" />
-    <template v-if="group">
+    <EmptyState v-if="hidden" title="This group isn’t available" body="An admin has archived it." />
+    <GroupHeader v-else-if="group" :group="group" current="stats" />
+    <template v-if="group && !hidden">
       <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="s-task">Task</Label>

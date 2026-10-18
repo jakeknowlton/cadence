@@ -139,7 +139,8 @@ service cloud.firestore {
           && d.weekStartLocked is bool
           && d.editWindowDays is int
           && d.editWindowDays >= 0
-          && d.editWindowDays <= 30;
+          && d.editWindowDays <= 30
+          && (!('archivedTaskIds' in d) || d.archivedTaskIds is list);
       }
 
       allow read: if isAdmin() || member() || formerMember();
@@ -158,7 +159,8 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt)
         // a member locks the week start alongside the group's first weekly completion
         || (member() && onlyChanged(['weekStartLocked']) && request.resource.data.weekStartLocked == true);
-      allow delete: if false;
+      // Admins delete a group and everything under it from the app; see useAdminDelete.
+      allow delete: if isAdmin();
 
       match /members/{uid} {
         allow read: if isAdmin() || isMemberOf(gid);
@@ -168,7 +170,7 @@ service cloud.firestore {
           && request.resource.data.joinedAt == request.time;
         allow update: if isAdmin()
           || (isSelf(uid) && isMemberOf(gid) && onlyChanged(['notifications']));
-        allow delete: if false;
+        allow delete: if isAdmin();
       }
 
       match /taskVersions/{vid} {
@@ -197,7 +199,7 @@ service cloud.firestore {
         allow update: if isAdmin()
           && onlyChanged(['name', 'description', 'icon', 'sortOrder', 'effectiveTo', 'fields', 'snapshot', 'updatedAt'])
           && request.resource.data.snapshot.diff(resource.data.snapshot).affectedKeys().hasOnly(['fields']);
-        allow delete: if false;
+        allow delete: if isAdmin();
       }
 
       match /completions/{cid} {
@@ -236,7 +238,8 @@ service cloud.firestore {
             && withinWindow(resource.data.completedAt)
             && withinWindow(request.resource.data.completedAt))
           || (isAdmin() && onlyChanged(['values', 'note', 'completedAt', 'deletedAt', 'updatedAt']));
-        allow delete: if false;
+        // Members soft-delete via deletedAt; only an admin deleting a task or group removes the record.
+        allow delete: if isAdmin();
       }
     }
 
@@ -247,7 +250,8 @@ service cloud.firestore {
 
     // ---------- notifications (inbox; written by the completing member's client) ----------
     match /notifications/{uid}/items/{id} {
-      allow read: if isSelf(uid) && isActiveUser();
+      // Admins read and delete only to clean up after deleting a task or group.
+      allow read: if (isSelf(uid) && isActiveUser()) || isAdmin();
       allow create: if isActiveUser()
         && uid != request.auth.uid
         && request.resource.data.actorId == request.auth.uid
@@ -259,7 +263,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.readAt == null;
       allow update: if isSelf(uid) && onlyChanged(['readAt']);
-      allow delete: if isSelf(uid);
+      allow delete: if isSelf(uid) || isAdmin();
     }
   }
 }

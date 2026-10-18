@@ -7,13 +7,14 @@ import { useGroupPeriod } from '@/composables/useGroupPeriod'
 import type { Cadence } from '@/types/task'
 import { periodFor, shiftDays } from '@/lib/periods'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import PeriodGrid from '@/components/groups/PeriodGrid.vue'
 import CadenceTabs from '@/components/groups/CadenceTabs.vue'
 import { Button } from '@/components/ui/button'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.id))
-const { group, members, versions, today } = useGroup(groupId)
+const { group, members, versions, today, hidden } = useGroup(groupId)
 const { nameOf } = useProfiles(() => members.value.map((m) => m.userId))
 
 const cadence = ref<Cadence>('daily')
@@ -49,8 +50,9 @@ const membersThen = computed(() =>
 
 <template>
   <section class="mx-auto max-w-3xl px-4 pt-6 pb-8">
-    <GroupHeader v-if="group" :group="group" current="history" />
-    <template v-if="group">
+    <EmptyState v-if="hidden" title="This group isn’t available" body="An admin has archived it." />
+    <GroupHeader v-else-if="group" :group="group" current="history" />
+    <template v-if="group && !hidden">
       <div class="mt-6 flex items-center justify-between gap-2">
         <div class="flex items-center gap-1">
           <Button variant="outline" size="icon" aria-label="Previous period" @click="step(-1)"><PhCaretLeft :size="18" /></Button>

@@ -102,6 +102,42 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
   await expect(page.getByText(/Admin did Drink water/)).toBeVisible()
 
+  // --- archiving a task hides it from members at once; deleting removes it ---
+  await page.goto('/admin/groups')
+  await page.getByRole('link', { name: /Test Crew/ }).click()
+  await page.getByRole('link', { name: /Run a mile/ }).click()
+  await page.getByRole('button', { name: 'Archive', exact: true }).click()
+  await page.getByRole('button', { name: 'Archive task' }).click()
+  await expect(page.getByText(/Members can’t see this task/)).toBeVisible()
+  await page.goto('/')
+  await expect(page.getByRole('listitem').filter({ hasText: 'Drink water' })).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Run a mile' })).toHaveCount(0)
+
+  await page.goto('/admin/groups')
+  await page.getByRole('link', { name: /Test Crew/ }).click()
+  await expect(page.getByRole('heading', { name: 'Archived' })).toBeVisible()
+  await page.getByRole('link', { name: /Run a mile/ }).click()
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.getByText(/permanently deletes the task, all 1 completion from 1 member/)).toBeVisible()
+  const forever = page.getByRole('button', { name: 'Delete forever' })
+  await expect(forever).toBeDisabled()
+  await page.getByLabel(/to confirm/).fill('Run a mile')
+  await forever.click()
+  await expect(page.getByRole('heading', { name: 'Test Crew' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Run a mile/ })).toHaveCount(0)
+
+  // --- a scratch group can be deleted outright ---
+  await page.goto('/admin/groups')
+  await page.getByRole('button', { name: /new group/i }).click()
+  await page.getByLabel('Name').fill('Scratch')
+  await page.getByRole('button', { name: 'Create' }).click()
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.getByLabel(/to confirm/).fill('Scratch')
+  await page.getByRole('button', { name: 'Delete forever' }).click()
+  await expect(page.getByRole('heading', { name: 'Groups' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Scratch/ })).toHaveCount(0)
+
   // --- invite a friend ---
   await page.goto('/admin/users')
   await page.getByRole('button', { name: 'Invite', exact: true }).click()

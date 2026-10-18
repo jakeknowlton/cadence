@@ -213,7 +213,7 @@ const effectSummary = computed(() => {
     case 'measured':
       return `Creates a new version from ${effectiveFrom.value}. Earlier periods keep the current definition.`
     case 'refused':
-      return 'A field’s type or unit cannot change. Replace the task instead: the current one is retired and a new one starts.'
+      return 'A field’s type or unit cannot change. Replace the task instead: the current one ends and a new one starts.'
     default:
       return ''
   }

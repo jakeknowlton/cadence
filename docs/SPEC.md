@@ -15,7 +15,7 @@ The app lives at `cadence.jkn.dev`. The package and Firebase project are named `
 - Admins manage users, groups, membership, and task definitions.
 - Logging a completion takes one tap for simple tasks and a few seconds for tasks with fields.
 - Tasks are flexible: cadence, active days, a simple checkbox or structured fields, an optional target, and a required count per period.
-- Nothing is ever deleted. Changing a task never alters past data, and long-term stats remain meaningful across changes.
+- Nothing is lost by accident. Changing a task never alters past data, and long-term stats remain meaningful across changes. Only an admin's explicit, confirmed delete removes data.
 - Members control their own notification preferences per group.
 - Mobile-first and installable as a web app on a phone.
 - Minimal operations and zero hosting cost. The app runs on Firebase's free plan with no server-side code at all.
@@ -58,8 +58,8 @@ The app lives at `cadence.jkn.dev`. The package and Firebase project are named `
 | Edit their own profile, timezone, and notification preferences | ✓ | ✓ |
 | Invite users; revoke invites | | ✓ |
 | Deactivate and reactivate users; grant and remove the admin role | | ✓ |
-| Create and archive groups; add and remove members | | ✓ |
-| Create, edit, and retire tasks | | ✓ |
+| Create, archive, restore, and delete groups; add and remove members | | ✓ |
+| Create, edit, archive, restore, and delete tasks | | ✓ |
 | Correct any member's completion at any time | | ✓ |
 | View every group, including ones they are not in | | ✓ |
 
@@ -77,7 +77,7 @@ An admin can deactivate a user. A deactivated user can no longer read or write a
 
 ## Groups
 
-An admin creates a group with a name, description, icon, colour, week start day (Sunday or Monday), and edit window in days (default 2). Groups can be archived, which makes them read-only and hides them from default lists, but never deleted.
+An admin creates a group with a name, description, icon, colour, week start day (Sunday or Monday), and edit window in days (default 2). Groups can be archived or deleted; see **Archiving and deleting**.
 
 The week start day locks once the group has any weekly completion. Changing it afterwards would create a week that overlaps the previous one, so a group that needs a different week start is a new group.
 
@@ -129,7 +129,18 @@ The editor classifies the edit as the admin types and shows exactly what will ha
 
 A completion has the same shape whatever the cadence or required count, so logged values can be totalled and charted straight across a measured change. What a measured change alters is how each period is judged, so completion rate and streaks are reported per cadence segment. A field's type or unit is the one thing that makes old and new values incomparable, so it is locked.
 
-Retiring a task removes it from future periods and keeps it in history and stats. Replacing a task retires it and creates a new one pre-filled from it, with a visible link between the two. Stats never combine a task with the one it replaced.
+Replacing a task ends it at the start of the next period and creates a new one pre-filled from it, with a visible link between the two. The old task stays in history and stats. Stats never combine a task with the one it replaced.
+
+### Archiving and deleting
+
+Admins can archive or delete any task or group, from the bottom of the task's page or the group's Settings tab.
+
+| Action | Effect | Undo |
+|--------|--------|------|
+| **Archive** | Takes effect immediately. The task or group disappears from every member view: Today, the Groups list, the group page, history, stats, personal history, and the inbox. Nothing is removed; admins see it under **Archived** in the admin area, with a banner saying members can't see it. Archiving a group hides all of its tasks. | Restore, from the same place. Everything returns as it was. |
+| **Delete** | Permanently removes the task or group and everything that belongs to it: task versions, every completion logged against it, the group's member list, and the inbox items about it. A deleted task is also dropped from members' alert preferences. | None. |
+
+Archiving asks for confirmation. Deleting opens a dialog that says how many completions from how many members will be removed, and the delete button stays disabled until the admin types the task or group name.
 
 ## Periods and time
 
@@ -233,3 +244,4 @@ All decided 15 October 2026 unless noted.
 | 22 | Spark plan only, no Cloud Functions. Invite acceptance is a rules-validated client batch; the inbox is written by the completing member's app; stats are computed in the app from raw completions. Push notifications deferred. |
 | 23 | Invites no longer pre-assign groups; the admin adds members after they join. |
 | 24 | Sign-in is Google, or email and password with a required verification email. Email link sign-in was dropped because the Spark plan allows only 5 such emails a day; verification emails allow 1,000. |
+| 25 | Tasks and groups are archived, not retired. Archiving hides them from members immediately and only admins see their history; restoring brings them back. Admins can also hard-delete a task or group, with all its data, after typing its name. (18 October 2026.) |

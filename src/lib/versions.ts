@@ -159,6 +159,7 @@ export function definitionOf(v: TaskVersionDoc): TaskDefinition {
   })
 }
 
-export function isRetired(v: TaskVersionDoc, today: DateString): boolean {
+/** Ended by a replacement (or an older retire); different from archived, which hides the task entirely. */
+export function hasEnded(v: TaskVersionDoc, today: DateString): boolean {
   return v.effectiveTo !== null && v.effectiveTo < today
 }

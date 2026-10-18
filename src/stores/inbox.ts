@@ -4,17 +4,20 @@ import { collection, doc, limit, orderBy, query, serverTimestamp, writeBatch } f
 import { useCollection } from 'vuefire'
 import { db } from '@/firebase'
 import { useAuthStore } from './auth'
+import { useGroupsStore } from './groups'
 import type { InboxItem } from '@/types/notification'
 
 export const useInboxStore = defineStore('inbox', () => {
   const authStore = useAuthStore()
-  const items = useCollection<InboxItem>(
+  const groupsStore = useGroupsStore()
+  const raw = useCollection<InboxItem>(
     computed(() =>
       authStore.uid && authStore.isActive
         ? query(collection(db, 'notifications', authStore.uid, 'items'), orderBy('createdAt', 'desc'), limit(100))
         : null,
     ),
   )
+  const items = computed(() => raw.value.filter((i) => !groupsStore.isHidden(i.groupId, i.taskId)))
   const unread = computed(() => items.value.filter((i) => !i.readAt))
   const unreadCount = computed(() => unread.value.length)
 

@@ -20,7 +20,7 @@ const raw = useCollection<Completion>(
       : null,
   ),
 )
-const completions = computed(() => raw.value.filter((c) => !c.deletedAt))
+const completions = computed(() => raw.value.filter((c) => !c.deletedAt && !groupsStore.isHidden(c.groupId, c.taskId)))
 const groupName = (id: string) => groupsStore.myGroups.find((g) => g.id === id)?.name ?? 'a former group'
 
 function summary(c: Completion) {

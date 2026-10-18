@@ -18,9 +18,16 @@ export const useGroupsStore = defineStore('groups', () => {
   const allGroups = useCollection<Group>(myGroupsQuery)
   const myGroups = computed(() => allGroups.value.filter((g) => !g.archivedAt))
 
+  /** Archived groups and tasks are hidden from members. Groups I've left aren't loaded, so they stay visible. */
+  function isHidden(groupId: string, taskId?: string): boolean {
+    const g = allGroups.value.find((x) => x.id === groupId)
+    if (!g) return false
+    return !!g.archivedAt || (!!taskId && (g.archivedTaskIds ?? []).includes(taskId))
+  }
+
   // Every group, for admins.
   const adminQuery = computed(() => (authStore.isAdmin ? query(collection(db, 'groups'), orderBy('name')) : null))
   const adminGroups = useCollection<Group>(adminQuery)
 
-  return { myGroups, adminGroups, myGroupsPending: allGroups.pending }
+  return { myGroups, adminGroups, myGroupsPending: allGroups.pending, isHidden }
 })

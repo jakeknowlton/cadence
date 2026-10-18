@@ -96,7 +96,7 @@ A task version has the following properties.
 | Active days | For daily tasks only: which weekdays the task applies to. Default every day. |
 | Required count | How many counting completions make a period complete. Default 1. "Lift three times a week" is a weekly task with a required count of 3. |
 | Completion type | Checkbox, or fields. |
-| Fields | For field tasks: a list of inputs, each with a key, label, type (number, duration, text, yes/no, or choice), optional unit, whether it is required, and optional min, max, step, and choices. |
+| Fields | For field tasks: a list of inputs, each with a key, label, type (number, duration, text, yes/no, or choice), optional unit, whether it is required, and optional choices. Number fields may also have a min and max, which refuse entries outside them, and a rounding step (shown as **Round to**), which rounds each entry to the nearest multiple when it is saved rather than refusing it. A goal must be reachable within its field's min and max. |
 | Goal | Optional. A comparison against one number or duration field, such as miles at least 1 or calories at most 2200. A completion only counts if it meets the goal, so done always means the goal was met. The goal's field is always required. An "at least" or "exactly" goal also sets that field's default to the goal amount, so the task can be completed in one tap and still records the amount. |
 
 ### Examples
@@ -122,7 +122,7 @@ Every completion keeps a snapshot of the task version it was logged against, so 
 | Class | Changes | Effect |
 |-------|---------|--------|
 | **Cosmetic** | Name, description, icon, sort order, field labels | Applied in place. History shows the new name. |
-| **Measured** | Cadence, active days, required count, completion type, adding or removing a field, a field's required flag, min, max, step, or choices, any part of the goal | A new task version takes effect at the start of the next period. Past periods keep the old definition. |
+| **Measured** | Cadence, active days, required count, completion type, adding or removing a field, a field's required flag, min, max, rounding, or choices, any part of the goal | A new task version takes effect at the start of the next period. Past periods keep the old definition. |
 | **Refused** | Changing an existing field's type or unit, or reusing a removed field's key with a different type or unit | Not allowed. The editor offers **Replace task** instead. |
 
 The editor classifies the edit as the admin types and shows exactly what will happen, including the date a new version takes effect. New tasks start in the current period.

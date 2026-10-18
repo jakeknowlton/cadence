@@ -7,7 +7,7 @@ import { useThemeStore, type ThemeChoice } from '@/stores/theme'
 import { browserTimezone } from '@/lib/invites'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-import NativeSelect from '@/components/ui/NativeSelect.vue'
+import SelectField from '@/components/ui/SelectField.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -83,7 +83,7 @@ const themeOptions: { value: ThemeChoice; label: string }[] = [
         </div>
         <div class="grid gap-1.5">
           <Label for="timezone">Timezone</Label>
-          <NativeSelect id="timezone" v-model="timezone" :options="timezones" />
+          <SelectField id="timezone" v-model="timezone" :options="timezones" />
           <p class="text-sm text-muted-foreground">Your days, weeks, and months roll over in this timezone.</p>
         </div>
         <div class="flex items-center gap-3">

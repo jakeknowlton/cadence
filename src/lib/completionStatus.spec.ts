@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Timestamp } from 'firebase/firestore'
 import type { TaskSnapshot } from '@/types/group'
 import type { Completion } from '@/types/completion'
-import { formatValue, isCounting, missingRequiredFields, periodStatus, quickValues, targetMet } from './completionStatus'
+import { formatValue, isCounting, roundToStep, missingRequiredFields, periodStatus, quickValues, targetMet } from './completionStatus'
 
 const calories: TaskSnapshot = {
   cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields',
@@ -73,6 +73,16 @@ describe('quickValues', () => {
   it('needs the sheet when a required field has no default or nothing has a default', () => {
     expect(quickValues(calories)).toBeNull()
     expect(quickValues({ ...run, fields: [{ key: 'time', label: 'Time', type: 'duration', required: false }] })).toBeNull()
+  })
+})
+
+describe('roundToStep', () => {
+  it('rounds to the nearest step without float noise, and leaves values alone without one', () => {
+    expect(roundToStep(1.24, 0.1)).toBe(1.2)
+    expect(roundToStep(0.25, 0.1)).toBe(0.3)
+    expect(roundToStep(2.3, 0.25)).toBe(2.25)
+    expect(roundToStep(2212, 5)).toBe(2210)
+    expect(roundToStep(1.234, undefined)).toBe(1.234)
   })
 })
 

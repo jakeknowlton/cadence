@@ -12,7 +12,7 @@ import { formatValue } from '@/lib/completionStatus'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import TrendChart from '@/components/groups/TrendChart.vue'
-import NativeSelect from '@/components/ui/NativeSelect.vue'
+import SelectField from '@/components/ui/SelectField.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import { Label } from '@/components/ui/label'
 
@@ -84,15 +84,15 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
       <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="s-task">Task</Label>
-          <NativeSelect id="s-task" v-model="taskId" :options="latest.map((v) => ({ value: v.taskId, label: v.name }))" />
+          <SelectField id="s-task" v-model="taskId" :options="latest.map((v) => ({ value: v.taskId, label: v.name }))" />
         </div>
         <div class="grid gap-1.5">
           <Label for="s-member">Who</Label>
-          <NativeSelect id="s-member" v-model="memberId" :options="[{ value: 'all', label: 'Everyone' }, ...members.map((m) => ({ value: m.id, label: nameOf(m.userId) }))]" />
+          <SelectField id="s-member" v-model="memberId" :options="[{ value: 'all', label: 'Everyone' }, ...members.map((m) => ({ value: m.id, label: nameOf(m.userId) }))]" />
         </div>
         <div class="grid gap-1.5">
           <Label for="s-range">Range</Label>
-          <NativeSelect id="s-range" v-model="rangeDays" :options="RANGES" />
+          <SelectField id="s-range" v-model="rangeDays" :options="RANGES" />
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import type { TaskDefinition, TaskField } from '@/types/task'
+import type { TaskDefinition, TaskField, TaskTarget } from '@/types/task'
 
 export type EditClass = 'none' | 'cosmetic' | 'measured' | 'refused'
 
@@ -104,6 +104,7 @@ export function validateDefinition(def: TaskDefinition): string[] {
       errors.push(`Field "${f.key}" needs options`)
     if (f.min !== undefined && f.max !== undefined && f.min > f.max)
       errors.push(`Field "${f.key}" min is greater than max`)
+    if (f.step !== undefined && !(f.step > 0)) errors.push(`Field "${f.key}" must round to a number above 0`)
   }
 
   if (def.target) {
@@ -113,9 +114,28 @@ export function validateDefinition(def: TaskDefinition): string[] {
       if (tf.type !== 'number' && tf.type !== 'duration')
         errors.push('Target field must be a number or duration')
       if (!tf.required) errors.push('A goal must be on a required field')
+      if (!goalFitsRange(def.target, tf.min, tf.max)) errors.push(`The goal must fall within ${tf.label || tf.key}'s min and max`)
     }
     if (def.target.comparator === 'between' && def.target.valueMax === undefined)
       errors.push('A "between" target needs valueMax')
+    else if (def.target.comparator === 'between' && def.target.valueMax! < def.target.value)
+      errors.push('A "between" goal needs its first value to be the smaller one')
   }
   return errors
+}
+
+/**
+ * Whether a goal can be met by a value inside the field's min and max. "At least" and "exactly"
+ * goals also become the one-tap default, so the goal amount itself must be in range.
+ */
+function goalFitsRange(t: TaskTarget, min = -Infinity, max = Infinity): boolean {
+  switch (t.comparator) {
+    case '>=':
+    case '==':
+      return t.value >= min && t.value <= max
+    case '<=':
+      return t.value >= min
+    case 'between':
+      return t.value <= max && (t.valueMax ?? t.value) >= min
+  }
 }

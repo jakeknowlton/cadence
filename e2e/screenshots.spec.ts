@@ -32,10 +32,12 @@ test('capture key screens', async ({ page }) => {
   await page.getByLabel('Name').fill('Fall Shred Crew')
   await page.getByRole('button', { name: 'Create' }).click()
   await page.getByRole('tab', { name: 'Members' }).click()
-  await page.locator('select').first().selectOption({ index: 1 })
+  await page.getByRole('combobox', { name: 'Member to add' }).click()
+  await page.getByRole('option').first().click()
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await page.getByRole('tab', { name: 'Settings' }).click()
-  await page.locator('#g-color').selectOption('teal')
+  await page.locator('#g-color').click()
+  await page.getByRole('option', { name: 'teal' }).click()
   await page.getByRole('button', { name: 'Save changes' }).click()
 
   const addTask = async (name: string, icon: string, fields = false) => {

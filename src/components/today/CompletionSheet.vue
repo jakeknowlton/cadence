@@ -4,13 +4,13 @@ import { PhTrash } from '@phosphor-icons/vue'
 import type { TaskField } from '@/types/task'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
-import { formatValue, missingRequiredFields, targetMet } from '@/lib/completionStatus'
+import { formatValue, missingRequiredFields, roundToStep, targetMet } from '@/lib/completionStatus'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import NativeSelect from '@/components/ui/NativeSelect.vue'
+import SelectField from '@/components/ui/SelectField.vue'
 
 const props = defineProps<{
   version: TaskVersionDoc | null
@@ -62,7 +62,7 @@ const normalized = computed<CompletionValues>(() => {
   const out: CompletionValues = {}
   for (const f of props.version?.fields ?? []) {
     const v = values.value[f.key]
-    if (f.type === 'number') out[f.key] = v === '' || v === null || v === undefined ? null : Number(v)
+    if (f.type === 'number') out[f.key] = v === '' || v === null || v === undefined ? null : roundToStep(Number(v), f.step)
     else if (f.type === 'text') out[f.key] = typeof v === 'string' && v.trim() ? v.trim() : null
     else out[f.key] = v ?? null
   }
@@ -131,7 +131,7 @@ function submit() {
               inputmode="decimal"
               :min="f.min"
               :max="f.max"
-              :step="f.step ?? 'any'"
+              step="any"
               @update:model-value="values[f.key] = $event === '' ? null : $event"
             />
             <Input
@@ -142,7 +142,7 @@ function submit() {
               placeholder="mm:ss or h:mm:ss"
               @input="onDuration(f)"
             />
-            <NativeSelect
+            <SelectField
               v-else-if="f.type === 'select'"
               :id="`f-${f.key}`"
               :model-value="(values[f.key] as string) ?? ''"
@@ -150,6 +150,9 @@ function submit() {
               @update:model-value="values[f.key] = $event || null"
             />
             <Input v-else :id="`f-${f.key}`" :model-value="(values[f.key] as string | null) ?? ''" @update:model-value="values[f.key] = String($event)" />
+            <p v-if="f.type === 'number' && f.step" class="text-xs text-muted-foreground">
+              Rounded to the nearest {{ f.step }}<template v-if="typeof normalized[f.key] === 'number' && normalized[f.key] !== Number(values[f.key])">: saves as {{ normalized[f.key] }}</template>
+            </p>
           </template>
         </div>
         <div class="grid gap-1.5">

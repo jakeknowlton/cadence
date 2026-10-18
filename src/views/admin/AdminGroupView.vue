@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import ConfirmDialog from '@/components/layout/ConfirmDialog.vue'
-import NativeSelect from '@/components/ui/NativeSelect.vue'
+import SelectField from '@/components/ui/SelectField.vue'
 import IconPicker from '@/components/tasks/IconPicker.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import { groupBar } from '@/lib/groupColor'
@@ -192,7 +192,7 @@ async function removeMember(uid: string) {
     <!-- Members -->
     <div v-else-if="tab === 'members'" class="mt-4 grid gap-4">
       <div class="flex gap-2">
-        <NativeSelect v-model="pick" :options="[{ value: '', label: 'Add a member…' }, ...candidates.map((u) => ({ value: u.id, label: `${u.displayName} (${u.email})` }))]" />
+        <SelectField v-model="pick" label="Member to add" placeholder="Add a member…" :options="[...candidates.map((u) => ({ value: u.id, label: `${u.displayName} (${u.email})` }))]" />
         <Button :disabled="!pick" @click="addMember">Add</Button>
       </div>
       <ul class="panel row-list overflow-hidden">
@@ -221,7 +221,7 @@ async function removeMember(uid: string) {
       <div class="grid grid-cols-2 gap-3">
         <div class="grid gap-1.5">
           <Label for="g-color">Colour</Label>
-          <NativeSelect id="g-color" v-model="form.color" :options="GROUP_COLORS.map((c) => ({ value: c, label: c }))" />
+          <SelectField id="g-color" v-model="form.color" :options="GROUP_COLORS.map((c) => ({ value: c, label: c }))" />
         </div>
         <div class="grid gap-1.5">
           <Label for="g-edit">Edit window (days)</Label>
@@ -230,7 +230,7 @@ async function removeMember(uid: string) {
       </div>
       <div class="grid gap-1.5">
         <Label for="g-week">Week starts on</Label>
-        <NativeSelect id="g-week" v-model="form.weekStartsOn" :options="[{ value: 1, label: 'Monday' }, { value: 0, label: 'Sunday' }]" :disabled="group.weekStartLocked" />
+        <SelectField id="g-week" v-model="form.weekStartsOn" :options="[{ value: 1, label: 'Monday' }, { value: 0, label: 'Sunday' }]" :disabled="group.weekStartLocked" />
         <p v-if="group.weekStartLocked" class="text-sm text-muted-foreground">Locked: this group already has weekly completions.</p>
       </div>
       <Button type="submit" :disabled="saving">Save changes</Button>

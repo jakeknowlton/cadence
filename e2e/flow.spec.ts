@@ -38,7 +38,8 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await expect(page.getByRole('heading', { name: 'Test Crew' })).toBeVisible()
 
   await page.getByRole("tab", { name: "Members" }).click()
-  await page.locator('select').first().selectOption({ index: 1 })
+  await page.getByRole('combobox', { name: 'Member to add' }).click()
+  await page.getByRole('option').first().click()
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible()
 
@@ -59,7 +60,8 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.getByPlaceholder('Unit (mi, kcal)').fill('kcal')
   await page.getByLabel('Required').click()
   await page.getByLabel('Goal', { exact: true }).click()
-  await page.locator('select').nth(3).selectOption('<=')
+  await page.getByRole('combobox', { name: 'Comparison' }).click()
+  await page.getByRole('option', { name: 'at most' }).click()
   await page.getByPlaceholder('Value').fill('2200')
   await page.getByRole('button', { name: 'Create task' }).click()
   await expect(page.getByText('Log calories')).toBeVisible()

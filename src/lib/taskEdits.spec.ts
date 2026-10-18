@@ -105,6 +105,22 @@ describe('validateDefinition', () => {
     const optional = edit({ fields: [{ ...run.fields[0]!, required: false }, run.fields[1]!] })
     expect(validateDefinition(optional)).toContain('A goal must be on a required field')
   })
+  it('rounding must be positive', () => {
+    expect(validateDefinition(edit({ fields: [{ ...run.fields[0]!, step: 0 }, run.fields[1]!] }))).toContain('Field "miles" must round to a number above 0')
+    expect(validateDefinition(edit({ fields: [{ ...run.fields[0]!, step: 0.1 }, run.fields[1]!] }))).toEqual([])
+  })
+  it('the goal must be reachable inside the field min and max', () => {
+    const withRange = (min: number | undefined, max: number | undefined, target: NonNullable<typeof run.target>) =>
+      validateDefinition(edit({ fields: [{ ...run.fields[0]!, min, max }, run.fields[1]!], target }))
+    const msg = "The goal must fall within Distance's min and max"
+    expect(withRange(0, 3, { fieldKey: 'miles', comparator: '>=', value: 5 })).toContain(msg)
+    expect(withRange(2, undefined, { fieldKey: 'miles', comparator: '>=', value: 1 })).toContain(msg) // one-tap default below min
+    expect(withRange(2, 10, { fieldKey: 'miles', comparator: '<=', value: 1 })).toContain(msg)
+    expect(withRange(5, 10, { fieldKey: 'miles', comparator: 'between', value: 1, valueMax: 3 })).toContain(msg)
+    expect(withRange(0, 10, { fieldKey: 'miles', comparator: '<=', value: 20 })).toEqual([])
+    expect(withRange(0, 10, { fieldKey: 'miles', comparator: 'between', value: 8, valueMax: 12 })).toEqual([])
+    expect(withRange(0, 10, { fieldKey: 'miles', comparator: 'between', value: 5, valueMax: 2 })).toContain('A "between" goal needs its first value to be the smaller one')
+  })
   it('target must point at a numeric field that exists', () => {
     expect(validateDefinition(edit({ target: { ...run.target!, fieldKey: 'nope' } }))[0]).toMatch(/unknown field/)
     const onText = edit({ fields: [{ key: 'note', label: 'Note', type: 'text', required: true }], target: { fieldKey: 'note', comparator: '>=', value: 1 } })

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import NativeSelect from '@/components/ui/NativeSelect.vue'
+import SelectField from '@/components/ui/SelectField.vue'
 import IconPicker from './IconPicker.vue'
 
 const props = defineProps<{
@@ -248,7 +248,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
     </div>
     <div class="grid gap-1.5">
       <Label for="task-cadence">Repeats</Label>
-      <NativeSelect id="task-cadence" v-model="def.cadence" :options="CADENCES" />
+      <SelectField id="task-cadence" v-model="def.cadence" :options="CADENCES" />
     </div>
     <div class="grid gap-1.5">
       <Label for="task-required">Times per {{ PERIOD_NOUN[def.cadence] }}</Label>
@@ -305,7 +305,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
           </Button>
         </div>
         <div class="grid grid-cols-2 gap-2">
-          <NativeSelect v-model="f.type" :options="FIELD_TYPES" :disabled="lockedKeys.has(f.key)" />
+          <SelectField v-model="f.type" label="Field type" :options="FIELD_TYPES" :disabled="lockedKeys.has(f.key)" />
           <Input
             v-if="f.type === 'number'"
             v-model="f.unit"
@@ -314,10 +314,22 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
           />
         </div>
         <div v-if="f.type === 'number'" class="grid grid-cols-3 gap-2">
-          <Input v-model="f.min" type="number" inputmode="decimal" placeholder="Min" />
-          <Input v-model="f.max" type="number" inputmode="decimal" placeholder="Max" />
-          <Input v-model="f.step" type="number" inputmode="decimal" placeholder="Step" />
+          <div class="grid gap-1">
+            <Label :for="`min-${i}`" class="text-xs text-muted-foreground">Min</Label>
+            <Input :id="`min-${i}`" v-model="f.min" type="number" inputmode="decimal" step="any" placeholder="None" />
+          </div>
+          <div class="grid gap-1">
+            <Label :for="`max-${i}`" class="text-xs text-muted-foreground">Max</Label>
+            <Input :id="`max-${i}`" v-model="f.max" type="number" inputmode="decimal" step="any" placeholder="None" />
+          </div>
+          <div class="grid gap-1">
+            <Label :for="`step-${i}`" class="text-xs text-muted-foreground">Round to</Label>
+            <Input :id="`step-${i}`" v-model="f.step" type="number" inputmode="decimal" step="any" min="0" placeholder="Exact" />
+          </div>
         </div>
+        <p v-if="f.type === 'number'" class="-mt-1 text-xs text-muted-foreground">
+          Entries outside min and max are refused. Round to 0.1 for one decimal place, 5 for the nearest 5.
+        </p>
         <Input
           v-if="f.type === 'select'"
           v-model="optionsText[f.key]"
@@ -345,8 +357,8 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         </div>
         <template v-if="def.target">
           <div class="grid grid-cols-2 gap-2">
-            <NativeSelect v-model="def.target.fieldKey" :options="numericFields.map((f) => ({ value: f.key, label: f.label || f.key }))" />
-            <NativeSelect v-model="def.target.comparator" :options="[...COMPARATORS]" />
+            <SelectField v-model="def.target.fieldKey" label="Goal field" :options="numericFields.map((f) => ({ value: f.key, label: f.label || f.key }))" />
+            <SelectField v-model="def.target.comparator" label="Comparison" :options="[...COMPARATORS]" />
           </div>
           <div class="grid grid-cols-2 gap-2">
             <Input v-model.number="def.target.value" type="number" inputmode="decimal" placeholder="Value" />

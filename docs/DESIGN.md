@@ -22,7 +22,7 @@ If push notifications or scheduled reminders are ever wanted, the step up is the
 |-------|--------|
 | Frontend | Vue 3, TypeScript, Vite, Pinia, Vue Router |
 | Firebase binding | VueFire |
-| UI | shadcn-vue (Reka UI primitives, Tailwind CSS v4), components copied into `src/components/ui` |
+| UI | shadcn-vue (Reka UI primitives, Tailwind CSS v4), components copied into `src/components/ui`. Dropdowns use `SelectField`, a wrapper over shadcn Select, rather than native selects. |
 | Icons | Phosphor Icons via `@phosphor-icons/vue`; replaces the Lucide imports shadcn-vue scaffolds with. A curated set of 48 is bundled for task and group icons. |
 | Type | Bricolage Grotesque (variable, optical size axis), one family; 800 for headings, tabular numerals for stats |
 | Theme | Light and dark via CSS variables on `:root` and `.dark`; a Pinia theme store persists the choice (auto, light, dark) and an inline script in `index.html` applies it before first paint. Palette: Chalk `#F3F5F2` / Pine Night `#0F1613` backgrounds, Pine `#1E5A45` primary, Clay `#B4443A` for missed. |
@@ -115,7 +115,8 @@ interface TaskField {
   type: 'number' | 'duration' | 'text' | 'boolean' | 'select'
   unit?: string
   required: boolean
-  min?: number; max?: number; step?: number
+  min?: number; max?: number
+  step?: number                     // rounding applied on save, not a validation rule
   options?: string[]
   default?: unknown
 }

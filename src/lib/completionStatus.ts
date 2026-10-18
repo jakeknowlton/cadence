@@ -60,6 +60,13 @@ export function periodStatus(snapshot: TaskSnapshot, completions: Completion[]):
   }
 }
 
+/** Rounds to the nearest multiple of `step`, keeping only the decimals the step has (so 0.1 steps never give 0.30000000000000004). */
+export function roundToStep(value: number, step: number | undefined): number {
+  if (!step || !(step > 0)) return value
+  const decimals = (String(step).split('.')[1] ?? '').length
+  return Number((Math.round(value / step) * step).toFixed(decimals))
+}
+
 export function formatValue(value: unknown, type: string, unit?: string): string {
   if (!present(value)) return ''
   if (type === 'duration' && typeof value === 'number') {

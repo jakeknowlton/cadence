@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { PhTrash } from '@phosphor-icons/vue'
-import type { TaskField } from '@/types/task'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
-import { formatValue, missingRequiredFields, roundToStep, targetMet } from '@/lib/completionStatus'
+import { formatValue, missingRequiredFields, outOfRangeFields, roundToStep } from '@/lib/completionStatus'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import DurationInput from '@/components/ui/DurationInput.vue'
+import YesNoInput from '@/components/ui/YesNoInput.vue'
 import SelectField from '@/components/ui/SelectField.vue'
 
 const props = defineProps<{
@@ -29,15 +29,13 @@ const emit = defineEmits<{
 const values = ref<CompletionValues>({})
 const note = ref('')
 const editing = ref<Completion | null>(null)
-const durationText = ref<Record<string, string>>({})
 
 function reset(from: Completion | null) {
   editing.value = from
   const v: CompletionValues = {}
   for (const f of props.version?.fields ?? []) {
     const existingVal = from?.values[f.key]
-    v[f.key] = existingVal ?? (f.default as CompletionValues[string]) ?? (f.type === 'boolean' ? false : null)
-    if (f.type === 'duration') durationText.value[f.key] = typeof v[f.key] === 'number' ? formatValue(v[f.key], 'duration') : ''
+    v[f.key] = existingVal ?? (f.default as CompletionValues[string]) ?? null
   }
   values.value = v
   note.value = from?.note ?? ''
@@ -49,15 +47,6 @@ watch(
   },
 )
 
-function parseDuration(text: string): number | null {
-  const parts = text.trim().split(':').map(Number)
-  if (parts.some((n) => Number.isNaN(n)) || parts.length === 0 || text.trim() === '') return null
-  return parts.reduce((acc, n) => acc * 60 + n, 0)
-}
-function onDuration(f: TaskField) {
-  values.value[f.key] = parseDuration(durationText.value[f.key] ?? '')
-}
-
 const normalized = computed<CompletionValues>(() => {
   const out: CompletionValues = {}
   for (const f of props.version?.fields ?? []) {
@@ -68,21 +57,18 @@ const normalized = computed<CompletionValues>(() => {
   }
   return out
 })
-const errors = computed(() => {
-  if (!props.version) return []
-  const errs: string[] = []
-  const missing = missingRequiredFields(props.version.snapshot, normalized.value)
-  for (const k of missing) errs.push(`${labelOf(k)} is required`)
-  for (const f of props.version.fields) {
-    const v = normalized.value[f.key]
-    if (typeof v !== 'number') continue
-    if (f.min !== undefined && v < f.min) errs.push(`${f.label} must be at least ${f.min}`)
-    if (f.max !== undefined && v > f.max) errs.push(`${f.label} must be at most ${f.max}`)
-  }
-  return errs
-})
-const goal = computed(() => (props.version ? targetMet(props.version.snapshot, normalized.value) : null))
-const labelOf = (key: string) => props.version?.fields.find((f) => f.key === key)?.label ?? key
+// Required fields must be filled before saving; out-of-range values are saved but flagged as not counting.
+const errors = computed(() =>
+  props.version ? missingRequiredFields(props.version.snapshot, normalized.value).map((k) => `${labelOf(k)} is required`) : [],
+)
+const outOfRange = computed(() =>
+  (props.version ? outOfRangeFields(props.version.snapshot, normalized.value) : []).map((o) => {
+    const f = fieldOf(o.key)
+    return `${f?.label || o.key} is ${o.side === 'min' ? 'below the min' : 'above the max'} of ${formatValue(o.limit, f?.type ?? 'number', f?.unit)}`
+  }),
+)
+const fieldOf = (key: string) => props.version?.fields.find((f) => f.key === key)
+const labelOf = (key: string) => fieldOf(key)?.label ?? key
 
 function submit() {
   if (errors.value.length) return
@@ -117,30 +103,30 @@ function submit() {
 
       <form v-if="version && editable" class="mt-4 grid gap-4" @submit.prevent="submit">
         <div v-for="f in version.fields" :key="f.key" class="grid gap-1.5">
-          <div v-if="f.type === 'boolean'" class="flex items-center justify-between">
-            <Label :for="`f-${f.key}`">{{ f.label }}</Label>
-            <Switch :id="`f-${f.key}`" :model-value="!!values[f.key]" @update:model-value="values[f.key] = $event" />
-          </div>
+          <Label :for="`f-${f.key}`">{{ f.label }}<span v-if="f.unit" class="text-muted-foreground"> ({{ f.unit }})</span><span v-if="f.required"> *</span></Label>
+          <YesNoInput
+            v-if="f.type === 'boolean'"
+            :id="`f-${f.key}`"
+            :label="f.label"
+            :model-value="(values[f.key] as boolean | null)"
+            @update:model-value="values[f.key] = $event ?? null"
+          />
           <template v-else>
-            <Label :for="`f-${f.key}`">{{ f.label }}<span v-if="f.unit" class="text-muted-foreground"> ({{ f.unit }})</span><span v-if="f.required"> *</span></Label>
             <Input
               v-if="f.type === 'number'"
               :id="`f-${f.key}`"
               :model-value="(values[f.key] as number | string | null) ?? undefined"
               type="number"
               inputmode="decimal"
-              :min="f.min"
-              :max="f.max"
               step="any"
               @update:model-value="values[f.key] = $event === '' ? null : $event"
             />
-            <Input
+            <DurationInput
               v-else-if="f.type === 'duration'"
               :id="`f-${f.key}`"
-              v-model="durationText[f.key]"
-              inputmode="numeric"
+              :model-value="(values[f.key] as number | null)"
               placeholder="mm:ss or h:mm:ss"
-              @input="onDuration(f)"
+              @update:model-value="values[f.key] = $event ?? null"
             />
             <SelectField
               v-else-if="f.type === 'select'"
@@ -159,7 +145,10 @@ function submit() {
           <Label for="f-note">Note</Label>
           <Input id="f-note" v-model="note" placeholder="Optional" maxlength="200" />
         </div>
-        <p v-if="goal === false" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Goal not met: this won’t count</p>
+        <div v-if="outOfRange.length" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+          <p v-for="m in outOfRange" :key="m">{{ m }}</p>
+          <p class="font-semibold">This will be saved but won’t count.</p>
+        </div>
         <ul v-if="errors.length" class="list-disc pl-4 text-sm text-destructive">
           <li v-for="e in errors" :key="e">{{ e }}</li>
         </ul>

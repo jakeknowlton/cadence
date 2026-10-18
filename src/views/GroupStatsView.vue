@@ -124,6 +124,7 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
                   <dd class="tabular font-medium">
                     {{ formatValue(p.stats.fields.find((x) => x.key === f.key)!.sum, f.type, f.unit) }} total,
                     {{ formatValue(+p.stats.fields.find((x) => x.key === f.key)!.avg.toFixed(1), f.type, f.unit) }} avg
+                    <span class="font-normal text-muted-foreground">({{ p.stats.fields.find((x) => x.key === f.key)!.count }} {{ p.stats.fields.find((x) => x.key === f.key)!.count === 1 ? 'entry' : 'entries' }})</span>
                   </dd>
                 </div>
               </template>

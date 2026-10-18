@@ -67,7 +67,7 @@ const sheetTask = ref<TaskVersionDoc | null>(null)
 async function toggle(v: TaskVersionDoc) {
   if (!group.value) return
   const status = statusOf(v)
-  // A field task logs in one tap when its fields have defaults (the goal amount); otherwise it needs the sheet.
+  // A field task logs in one tap when every required field has a default; otherwise it needs the sheet.
   const values = v.completionType === 'fields' ? quickValues(v.snapshot) : {}
   if (!values && !status.complete) {
     openSheet(v)

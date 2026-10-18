@@ -5,6 +5,7 @@ import type { Group, Membership, TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
 import type { Period } from '@/lib/periods'
 import { inboxItemId, recipientsFor } from '@/lib/notifications'
+import { isCounting } from '@/lib/completionStatus'
 
 const FANOUT_CHUNK = 8 // each inbox write costs two rule reads; stay well under the per-batch limit
 
@@ -40,6 +41,9 @@ export function useLogCompletion() {
       batch.update(doc(db, 'groups', group.id), { weekStartLocked: true })
     }
     await batch.commit()
+
+    // Only a completion that counts is news; an out-of-range or incomplete entry tells nobody.
+    if (!isCounting(version.snapshot, opts.values ?? {})) return ref.id
 
     // Best-effort inbox fan-out; a failure here must not undo the completion.
     try {

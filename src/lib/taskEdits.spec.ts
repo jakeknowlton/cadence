@@ -12,10 +12,9 @@ const run: TaskDefinition = {
   requiredCount: 1,
   completionType: 'fields',
   fields: [
-    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, step: 0.1, default: 1 },
-    { key: 'time', label: 'Time', type: 'duration', required: false },
+    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 1, step: 0.1, default: 1 },
+    { key: 'time', label: 'Time', type: 'duration', required: false, max: 600 },
   ],
-  target: { fieldKey: 'miles', comparator: '>=', value: 1 },
 }
 
 function edit(patch: Partial<TaskDefinition>): TaskDefinition {
@@ -27,22 +26,21 @@ describe('classifyEdit', () => {
     expect(classifyEdit(run, { ...run }).class).toBe('none')
   })
 
-  it('name, description, icon, sort order, and field labels are cosmetic', () => {
+  it('name, description, icon, sort order, field labels, and field defaults are cosmetic', () => {
     expect(classifyEdit(run, edit({ name: 'Run' })).class).toBe('cosmetic')
     expect(classifyEdit(run, edit({ description: undefined })).class).toBe('cosmetic')
     expect(classifyEdit(run, edit({ icon: 'Sneaker' })).class).toBe('cosmetic')
     expect(classifyEdit(run, edit({ sortOrder: 5 })).class).toBe('cosmetic')
     const relabelled = edit({ fields: [{ ...run.fields[0]!, label: 'Miles' }, run.fields[1]!] })
     expect(classifyEdit(run, relabelled).class).toBe('cosmetic')
+    const redefaulted = edit({ fields: [{ ...run.fields[0]!, default: 2 }, run.fields[1]!] })
+    expect(classifyEdit(run, redefaulted).class).toBe('cosmetic')
   })
 
-  it('cadence, active days, required count, completion type, and target are measured', () => {
+  it('cadence, active days, required count, and completion type are measured', () => {
     expect(classifyEdit(run, edit({ cadence: 'weekly' })).class).toBe('measured')
     expect(classifyEdit(run, edit({ activeDays: [1, 2, 3, 4, 5] })).class).toBe('measured')
     expect(classifyEdit(run, edit({ requiredCount: 2 })).class).toBe('measured')
-    expect(classifyEdit(run, edit({ target: { ...run.target!, value: 2 } })).class).toBe('measured')
-    expect(classifyEdit(run, edit({ target: { ...run.target!, comparator: '==' } })).class).toBe('measured')
-    expect(classifyEdit(run, edit({ target: undefined })).class).toBe('measured')
   })
 
   it('adding or removing a field is measured', () => {
@@ -51,8 +49,8 @@ describe('classifyEdit', () => {
     expect(classifyEdit(run, added).class).toBe('measured')
   })
 
-  it('field required/min/max/step/options/default are measured', () => {
-    for (const patch of [{ required: false }, { min: 0.5 }, { max: 100 }, { step: 1 }, { default: 2 }]) {
+  it('field required/min/max/step/options are measured', () => {
+    for (const patch of [{ required: false }, { min: 0.5 }, { max: 100 }, { step: 1 }]) {
       const changed = edit({ fields: [{ ...run.fields[0]!, ...patch }, run.fields[1]!] })
       expect(classifyEdit(run, changed).class).toBe('measured')
     }
@@ -66,10 +64,10 @@ describe('classifyEdit', () => {
   })
 
   it('re-adding a previously removed key with a different type or unit is refused', () => {
-    const without = edit({ fields: [run.fields[1]!], target: undefined })
-    const readded = edit({ fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'km', required: false }, run.fields[1]!], target: undefined })
+    const without = edit({ fields: [run.fields[1]!] })
+    const readded = edit({ fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'km', required: false }, run.fields[1]!] })
     expect(classifyEdit(without, readded, { miles: 'number|mi' }).class).toBe('refused')
-    const readdedSame = edit({ fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false }, run.fields[1]!], target: undefined })
+    const readdedSame = edit({ fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false }, run.fields[1]!] })
     expect(classifyEdit(without, readdedSame, { miles: 'number|mi' }).class).toBe('measured')
   })
 
@@ -98,32 +96,26 @@ describe('validateDefinition', () => {
   })
   it('checkbox tasks have no fields; field tasks need one', () => {
     expect(validateDefinition(edit({ completionType: 'checkbox' }))).toContain('A checkbox task has no fields')
-    expect(validateDefinition(edit({ fields: [], target: undefined }))).toContain('A fields task needs at least one field')
-  })
-  it('a goal must be on a required field', () => {
-    expect(validateDefinition(run)).toEqual([])
-    const optional = edit({ fields: [{ ...run.fields[0]!, required: false }, run.fields[1]!] })
-    expect(validateDefinition(optional)).toContain('A goal must be on a required field')
+    expect(validateDefinition(edit({ fields: [] }))).toContain('A fields task needs at least one field')
   })
   it('rounding must be positive', () => {
     expect(validateDefinition(edit({ fields: [{ ...run.fields[0]!, step: 0 }, run.fields[1]!] }))).toContain('Field "miles" must round to a number above 0')
-    expect(validateDefinition(edit({ fields: [{ ...run.fields[0]!, step: 0.1 }, run.fields[1]!] }))).toEqual([])
   })
-  it('the goal must be reachable inside the field min and max', () => {
-    const withRange = (min: number | undefined, max: number | undefined, target: NonNullable<typeof run.target>) =>
-      validateDefinition(edit({ fields: [{ ...run.fields[0]!, min, max }, run.fields[1]!], target }))
-    const msg = "The goal must fall within Distance's min and max"
-    expect(withRange(0, 3, { fieldKey: 'miles', comparator: '>=', value: 5 })).toContain(msg)
-    expect(withRange(2, undefined, { fieldKey: 'miles', comparator: '>=', value: 1 })).toContain(msg) // one-tap default below min
-    expect(withRange(2, 10, { fieldKey: 'miles', comparator: '<=', value: 1 })).toContain(msg)
-    expect(withRange(5, 10, { fieldKey: 'miles', comparator: 'between', value: 1, valueMax: 3 })).toContain(msg)
-    expect(withRange(0, 10, { fieldKey: 'miles', comparator: '<=', value: 20 })).toEqual([])
-    expect(withRange(0, 10, { fieldKey: 'miles', comparator: 'between', value: 8, valueMax: 12 })).toEqual([])
-    expect(withRange(0, 10, { fieldKey: 'miles', comparator: 'between', value: 5, valueMax: 2 })).toContain('A "between" goal needs its first value to be the smaller one')
+  it('a default must count: inside min and max and on the rounding steps', () => {
+    const miles = (patch: object) => validateDefinition(edit({ fields: [{ ...run.fields[0]!, ...patch }, run.fields[1]!] }))
+    expect(miles({ default: 0.5 })).toContain("Distance's default must be within its min and max")
+    expect(miles({ default: 1.05 })).toContain("Distance's default must be a multiple of 0.1")
+    expect(miles({ default: 1.5 })).toEqual([])
+    expect(miles({ default: undefined })).toEqual([])
+    const time = (d: unknown) => validateDefinition(edit({ fields: [run.fields[0]!, { ...run.fields[1]!, default: d }] }))
+    expect(time(700)).toContain("Time's default must be within its min and max")
+    expect(time(540)).toEqual([])
   })
-  it('target must point at a numeric field that exists', () => {
-    expect(validateDefinition(edit({ target: { ...run.target!, fieldKey: 'nope' } }))[0]).toMatch(/unknown field/)
-    const onText = edit({ fields: [{ key: 'note', label: 'Note', type: 'text', required: true }], target: { fieldKey: 'note', comparator: '>=', value: 1 } })
-    expect(validateDefinition(onText)).toContain('Target field must be a number or duration')
+  it('a default must match its field type', () => {
+    const one = (f: object) => validateDefinition(edit({ fields: [f as TaskDefinition['fields'][number]] }))
+    expect(one({ key: 'ok', label: 'OK', type: 'boolean', required: true, default: 'yes' })).toContain("OK's default must be yes or no")
+    expect(one({ key: 'ok', label: 'OK', type: 'boolean', required: true, default: false })).toEqual([])
+    expect(one({ key: 'mood', label: 'Mood', type: 'select', required: false, options: ['good', 'bad'], default: 'meh' })).toContain("Mood's default must be one of its choices")
+    expect(one({ key: 'mood', label: 'Mood', type: 'select', required: false, options: ['good', 'bad'], default: 'good' })).toEqual([])
   })
 })

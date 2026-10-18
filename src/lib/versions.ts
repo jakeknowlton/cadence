@@ -23,7 +23,6 @@ export function snapshotOf(def: TaskDefinition): TaskSnapshot {
     requiredCount: def.requiredCount,
     completionType: def.completionType,
     fields: def.fields,
-    target: def.target ?? null,
   })
 }
 
@@ -64,7 +63,6 @@ export function newTaskVersion(
 ): VersionWrite {
   return clean({
     ...def,
-    target: def.target ?? null,
     activeDays: def.cadence === 'daily' ? def.activeDays : null,
     taskId: opts.taskId,
     version: 1,
@@ -88,7 +86,6 @@ export function nextTaskVersion(
   return {
     version: clean({
       ...def,
-      target: def.target ?? null,
       activeDays: def.cadence === 'daily' ? def.activeDays : null,
       taskId: prev.taskId,
       version: prev.version + 1,
@@ -155,7 +152,6 @@ export function definitionOf(v: TaskVersionDoc): TaskDefinition {
     requiredCount: v.requiredCount,
     completionType: v.completionType,
     fields: v.fields,
-    target: v.target ?? undefined,
   })
 }
 

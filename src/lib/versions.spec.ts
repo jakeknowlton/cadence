@@ -6,8 +6,7 @@ import { effectiveFromForChange, lineageFieldTypes, newTaskVersion, nextTaskVers
 
 const def: TaskDefinition = {
   name: 'Run', sortOrder: 1, cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields',
-  fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, default: 1 }],
-  target: { fieldKey: 'miles', comparator: '>=', value: 1 },
+  fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 1, default: 1 }],
 }
 
 function asDoc(w: ReturnType<typeof newTaskVersion>, id: string): TaskVersionDoc {
@@ -23,15 +22,13 @@ describe('newTaskVersion', () => {
     expect(v.fieldTypes).toEqual({ miles: 'number|mi' })
     expect(v.snapshot).toEqual({
       cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields',
-      fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, default: 1 }],
-      target: { fieldKey: 'miles', comparator: '>=', value: 1 },
+      fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 1, default: 1 }],
     })
     expect(JSON.stringify(v)).not.toContain('undefined')
   })
 
-  it('snapshot uses null for a missing target and drops activeDays off non-daily tasks', () => {
-    const s = snapshotOf({ ...def, cadence: 'weekly', activeDays: [1], target: undefined })
-    expect(s.target).toBeNull()
+  it('snapshot drops activeDays off non-daily tasks', () => {
+    const s = snapshotOf({ ...def, cadence: 'weekly', activeDays: [1] })
     expect(s.activeDays).toBeNull()
   })
 })
@@ -39,7 +36,7 @@ describe('newTaskVersion', () => {
 describe('nextTaskVersion', () => {
   it('increments, links to prev, carries lineage field types, and closes prev the day before', () => {
     const v1 = asDoc(newTaskVersion(def, { taskId: 't1', effectiveFrom: '2026-01-01', createdBy: 'u' }), 'v1')
-    const changed = { ...def, fields: [{ key: 'time', label: 'Time', type: 'duration' as const, required: false }], target: undefined }
+    const changed = { ...def, fields: [{ key: 'time', label: 'Time', type: 'duration' as const, required: false }] }
     const { version, closePrev } = nextTaskVersion(v1, changed, { effectiveFrom: '2026-10-16', createdBy: 'u', lineage: lineageFieldTypes([v1], 't1') })
     expect(version.version).toBe(2)
     expect(version.prevVersionId).toBe('v1')

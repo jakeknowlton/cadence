@@ -15,7 +15,7 @@ const meta = computed(() => {
   const parts: string[] = []
   if (props.version.cadence !== 'daily') parts.push(props.version.cadence === 'weekly' ? 'this week' : 'this month')
   if (multi.value) parts.push(`${props.status.count} of ${props.status.required}`)
-  if (props.status.total > 0 && !props.status.complete && props.status.count < props.status.total) parts.push('logged, goal not met')
+  if (props.status.total > 0 && !props.status.complete && props.status.count < props.status.total) parts.push('logged, not counting')
   return parts.join(', ')
 })
 </script>

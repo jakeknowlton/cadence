@@ -1,42 +1,42 @@
 import type { TaskSnapshot } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
 
-function present(v: unknown): boolean {
+export function hasValue(v: unknown): boolean {
   return v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && Number.isNaN(v))
 }
 
 export function missingRequiredFields(snapshot: TaskSnapshot, values: CompletionValues): string[] {
-  return snapshot.fields.filter((f) => f.required && !present(values[f.key])).map((f) => f.key)
+  return snapshot.fields.filter((f) => f.required && !hasValue(values[f.key])).map((f) => f.key)
 }
 
-/** true/false if the target can be evaluated, null if there is no target or the field is empty. */
-export function targetMet(snapshot: TaskSnapshot, values: CompletionValues): boolean | null {
-  const t = snapshot.target
-  if (!t) return null
-  const raw = values[t.fieldKey]
-  if (!present(raw) || typeof raw !== 'number') return null
-  switch (t.comparator) {
-    case '>=':
-      return raw >= t.value
-    case '<=':
-      return raw <= t.value
-    case '==':
-      return raw === t.value
-    case 'between':
-      return raw >= t.value && raw <= (t.valueMax ?? t.value)
+export interface OutOfRange {
+  key: string
+  /** which limit the value crossed */
+  side: 'min' | 'max'
+  limit: number
+}
+
+/** Entered number and duration values outside their field's min or max. Blank values are never out of range. */
+export function outOfRangeFields(snapshot: TaskSnapshot, values: CompletionValues): OutOfRange[] {
+  const out: OutOfRange[] = []
+  for (const f of snapshot.fields) {
+    if (f.type !== 'number' && f.type !== 'duration') continue
+    const v = values[f.key]
+    if (typeof v !== 'number' || Number.isNaN(v)) continue
+    if (f.min !== undefined && v < f.min) out.push({ key: f.key, side: 'min', limit: f.min })
+    else if (f.max !== undefined && v > f.max) out.push({ key: f.key, side: 'max', limit: f.max })
   }
+  return out
 }
 
-/** A completion counts when required fields are present and the goal, if any, is met. */
+/** A completion counts when every required field has a value and every entered value is within its min and max. */
 export function isCounting(snapshot: TaskSnapshot, values: CompletionValues): boolean {
-  if (missingRequiredFields(snapshot, values).length > 0) return false
-  return targetMet(snapshot, values) !== false
+  return missingRequiredFields(snapshot, values).length === 0 && outOfRangeFields(snapshot, values).length === 0
 }
 
-/** Values for a one-tap log: every field's default, or null if there is nothing to default or a required field has none. */
+/** Values for a one-tap log: every field's default, or null if a required field has no default. */
 export function quickValues(snapshot: TaskSnapshot): CompletionValues | null {
-  if (!snapshot.fields.some((f) => present(f.default))) return null
-  if (snapshot.fields.some((f) => f.required && !present(f.default))) return null
+  if (snapshot.fields.some((f) => f.required && !hasValue(f.default))) return null
   return Object.fromEntries(snapshot.fields.map((f) => [f.key, (f.default as CompletionValues[string]) ?? null]))
 }
 
@@ -67,8 +67,15 @@ export function roundToStep(value: number, step: number | undefined): number {
   return Number((Math.round(value / step) * step).toFixed(decimals))
 }
 
+/** Parses "45", "12:30", or "1:02:05" into seconds; null if blank or not a duration. */
+export function parseDuration(text: string): number | null {
+  const t = text.trim()
+  if (!t || !/^\d+(:\d{1,2}){0,2}$/.test(t)) return null
+  return t.split(':').map(Number).reduce((acc, n) => acc * 60 + n, 0)
+}
+
 export function formatValue(value: unknown, type: string, unit?: string): string {
-  if (!present(value)) return ''
+  if (!hasValue(value)) return ''
   if (type === 'duration' && typeof value === 'number') {
     const h = Math.floor(value / 3600)
     const m = Math.floor((value % 3600) / 60)

@@ -5,7 +5,7 @@ import type { Cadence, FieldType, TaskDefinition, TaskField, Weekday } from '@/t
 import type { TaskVersionDoc } from '@/types/group'
 import { classifyEdit, validateDefinition, type EditClassification } from '@/lib/taskEdits'
 import { effectiveFromForChange } from '@/lib/versions'
-import { formatValue } from '@/lib/completionStatus'
+import { hasValue } from '@/lib/completionStatus'
 import type { DateString } from '@/lib/periods'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import SelectField from '@/components/ui/SelectField.vue'
+import DurationInput from '@/components/ui/DurationInput.vue'
+import YesNoInput from '@/components/ui/YesNoInput.vue'
 import IconPicker from './IconPicker.vue'
 
 const props = defineProps<{
@@ -56,12 +58,6 @@ const WEEKDAYS: { value: Weekday; label: string }[] = [
   { value: 0, label: 'Su' }, { value: 1, label: 'Mo' }, { value: 2, label: 'Tu' }, { value: 3, label: 'We' },
   { value: 4, label: 'Th' }, { value: 5, label: 'Fr' }, { value: 6, label: 'Sa' },
 ]
-const COMPARATORS = [
-  { value: '>=', label: 'at least' },
-  { value: '<=', label: 'at most' },
-  { value: '==', label: 'exactly' },
-  { value: 'between', label: 'between' },
-] as const
 
 const certainDays = computed({
   get: () => def.activeDays !== null,
@@ -88,24 +84,6 @@ function toggleDay(d: Weekday) {
   def.activeDays = def.activeDays.includes(d) ? def.activeDays.filter((x) => x !== d) : [...def.activeDays, d].sort()
 }
 
-const hasTarget = computed({
-  get: () => !!def.target,
-  set: (v) => {
-    def.target = v ? { fieldKey: numericFields.value[0]?.key ?? '', comparator: '>=', value: 1 } : undefined
-  },
-})
-const numericFields = computed(() => def.fields.filter((f) => f.type === 'number' || f.type === 'duration'))
-/** An "at least" or "exactly" goal is also the amount a one-tap log records; other goals have no obvious amount. */
-const goalDefault = computed(() => {
-  const t = def.target
-  if (!t || (t.comparator !== '>=' && t.comparator !== '==')) return undefined
-  return numOrUndef(t.value)
-})
-const isGoalField = (f: TaskField) => def.target?.fieldKey === f.key
-const goalDefaultLabel = computed(() => {
-  const f = def.fields.find(isGoalField)
-  return f && goalDefault.value !== undefined ? formatValue(goalDefault.value, f.type, f.unit?.trim()) : ''
-})
 const optionsText = reactive<Record<string, string>>({})
 
 function keyFor(label: string, existing: string[]): string {
@@ -130,7 +108,7 @@ function addField() {
 function removeField(i: number) {
   const f = def.fields[i]!
   def.fields.splice(i, 1)
-  if (def.target?.fieldKey === f.key) def.target = undefined
+  delete optionsText[f.key]
 }
 function onLabelInput(f: TaskField) {
   // New fields take their key from the label until first saved; existing keys never change.
@@ -156,10 +134,7 @@ watch(
 watch(
   () => def.completionType,
   (t) => {
-    if (t === 'checkbox') {
-      def.fields = []
-      def.target = undefined
-    }
+    if (t === 'checkbox') def.fields = []
   },
 )
 
@@ -169,19 +144,42 @@ const normalized = computed<TaskDefinition>(() => ({
   name: def.name.trim(),
   description: def.description?.trim() || undefined,
   activeDays: def.cadence === 'daily' ? def.activeDays : null,
-  fields: def.fields.map((f) => ({
-    ...f,
-    label: f.label.trim() || f.key,
-    unit: f.unit?.trim() || undefined,
-    min: numOrUndef(f.min),
-    max: numOrUndef(f.max),
-    step: numOrUndef(f.step),
-    options: f.type === 'select' ? f.options : undefined,
-    // The goal's field is always required and defaults to the goal amount.
-    required: isGoalField(f) || f.required,
-    default: isGoalField(f) ? goalDefault.value : undefined,
-  })),
+  fields: def.fields.map((f) => {
+    const ranged = f.type === 'number' || f.type === 'duration'
+    return {
+      ...f,
+      label: f.label.trim() || f.key,
+      unit: f.type === 'number' ? f.unit?.trim() || undefined : undefined,
+      min: ranged ? numOrUndef(f.min) : undefined,
+      max: ranged ? numOrUndef(f.max) : undefined,
+      step: f.type === 'number' ? numOrUndef(f.step) : undefined,
+      options: f.type === 'select' ? f.options : undefined,
+      default: defaultFor(f),
+    }
+  }),
 }))
+/** The default in the field's own type, or undefined; leftovers from a type change are dropped. */
+function defaultFor(f: TaskField): unknown {
+  const d = f.default
+  switch (f.type) {
+    case 'number':
+    case 'duration':
+      return numOrUndef(d)
+    case 'boolean':
+      return typeof d === 'boolean' ? d : undefined
+    case 'select':
+      return typeof d === 'string' && d ? d : undefined
+    case 'text':
+      return typeof d === 'string' && d.trim() ? d.trim() : undefined
+  }
+}
+/** Plain-language result of the required and default settings, so admins see what the check button will do. */
+const tapSummary = computed(() => {
+  if (normalized.value.completionType !== 'fields' || normalized.value.fields.length === 0) return ''
+  const blocking = normalized.value.fields.filter((f) => f.required && !hasValue(f.default))
+  if (blocking.length === 0) return 'Tapping the check logs it in one tap, using any defaults.'
+  return `Tapping the check opens the form, because ${blocking.map((f) => f.label).join(' and ')} ${blocking.length === 1 ? 'is' : 'are'} required with no default.`
+})
 function numOrUndef(v: unknown): number | undefined {
   if (v === '' || v === undefined || v === null) return undefined
   const n = Number(v)
@@ -196,7 +194,7 @@ const classification = computed<EditClassification>(() =>
 const definitionOfCurrent = computed<TaskDefinition>(() => {
   const c = props.current!
   return { name: c.name, description: c.description, icon: c.icon, sortOrder: c.sortOrder, cadence: c.cadence,
-    activeDays: c.activeDays, requiredCount: c.requiredCount, completionType: c.completionType, fields: c.fields, target: c.target ?? undefined }
+    activeDays: c.activeDays, requiredCount: c.requiredCount, completionType: c.completionType, fields: c.fields }
 })
 const effectiveFrom = computed(() =>
   props.current
@@ -313,6 +311,12 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
             :disabled="lockedKeys.has(f.key)"
           />
         </div>
+        <Input
+          v-if="f.type === 'select'"
+          v-model="optionsText[f.key]"
+          placeholder="Choices, comma separated"
+          @input="syncOptions(f)"
+        />
         <div v-if="f.type === 'number'" class="grid grid-cols-3 gap-2">
           <div class="grid gap-1">
             <Label :for="`min-${i}`" class="text-xs text-muted-foreground">Min</Label>
@@ -327,20 +331,37 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
             <Input :id="`step-${i}`" v-model="f.step" type="number" inputmode="decimal" step="any" min="0" placeholder="Exact" />
           </div>
         </div>
-        <p v-if="f.type === 'number'" class="-mt-1 text-xs text-muted-foreground">
-          Entries outside min and max are refused. Round to 0.1 for one decimal place, 5 for the nearest 5.
+        <div v-else-if="f.type === 'duration'" class="grid grid-cols-2 gap-2">
+          <div class="grid gap-1">
+            <Label :for="`min-${i}`" class="text-xs text-muted-foreground">Min</Label>
+            <DurationInput :id="`min-${i}`" v-model="f.min" placeholder="None" />
+          </div>
+          <div class="grid gap-1">
+            <Label :for="`max-${i}`" class="text-xs text-muted-foreground">Max</Label>
+            <DurationInput :id="`max-${i}`" v-model="f.max" placeholder="None" />
+          </div>
+        </div>
+        <p v-if="f.type === 'number' || f.type === 'duration'" class="-mt-1 text-xs text-muted-foreground">
+          Entries outside min and max are saved but don’t count.<template v-if="f.type === 'number'"> Round to 0.1 for one decimal place, 5 for the nearest 5.</template>
         </p>
-        <Input
-          v-if="f.type === 'select'"
-          v-model="optionsText[f.key]"
-          placeholder="Choices, comma separated"
-          @input="syncOptions(f)"
-        />
+        <div class="grid gap-1">
+          <Label :for="`default-${i}`" class="text-xs text-muted-foreground">Default</Label>
+          <Input v-if="f.type === 'number'" :id="`default-${i}`" :model-value="(f.default as number | string | undefined)" type="number" inputmode="decimal" step="any" placeholder="None" @update:model-value="f.default = $event" />
+          <DurationInput v-else-if="f.type === 'duration'" :id="`default-${i}`" :model-value="typeof f.default === 'number' ? f.default : null" placeholder="None" @update:model-value="f.default = $event ?? undefined" />
+          <YesNoInput v-else-if="f.type === 'boolean'" :id="`default-${i}`" label="Default" :model-value="typeof f.default === 'boolean' ? f.default : null" @update:model-value="f.default = $event ?? undefined" />
+          <SelectField
+            v-else-if="f.type === 'select'"
+            :id="`default-${i}`"
+            :model-value="typeof f.default === 'string' ? f.default : ''"
+            :options="[{ value: '', label: 'None' }, ...(f.options ?? []).map((o) => ({ value: o, label: o }))]"
+            @update:model-value="f.default = $event || undefined"
+          />
+          <Input v-else :id="`default-${i}`" :model-value="typeof f.default === 'string' ? f.default : ''" placeholder="None" @update:model-value="f.default = String($event)" />
+        </div>
         <div class="flex items-center justify-between">
           <Label :for="`req-${i}`">Required</Label>
-          <Switch :id="`req-${i}`" :model-value="isGoalField(f) || f.required" :disabled="isGoalField(f)" @update:model-value="f.required = $event" />
+          <Switch :id="`req-${i}`" :model-value="f.required" @update:model-value="f.required = $event" />
         </div>
-        <p v-if="isGoalField(f)" class="text-sm text-muted-foreground">Required because the goal uses it.</p>
         <p v-if="lockedKeys.has(f.key)" class="text-sm text-muted-foreground">
           Type and unit are locked so past entries stay comparable.
         </p>
@@ -350,33 +371,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         Add field
       </Button>
 
-      <div v-if="numericFields.length" class="grid gap-3 rounded-xl bg-muted/60 p-3">
-        <div class="flex items-center justify-between">
-          <Label for="task-target" class="font-semibold">Goal</Label>
-          <Switch id="task-target" :model-value="hasTarget" @update:model-value="hasTarget = $event" />
-        </div>
-        <template v-if="def.target">
-          <div class="grid grid-cols-2 gap-2">
-            <SelectField v-model="def.target.fieldKey" label="Goal field" :options="numericFields.map((f) => ({ value: f.key, label: f.label || f.key }))" />
-            <SelectField v-model="def.target.comparator" label="Comparison" :options="[...COMPARATORS]" />
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <Input v-model.number="def.target.value" type="number" inputmode="decimal" placeholder="Value" />
-            <Input
-              v-if="def.target.comparator === 'between'"
-              v-model.number="def.target.valueMax"
-              type="number"
-              inputmode="decimal"
-              placeholder="and"
-            />
-          </div>
-          <p class="text-sm text-muted-foreground">
-            Only entries that meet the goal count.
-            <template v-if="goalDefault !== undefined">Tapping the check logs {{ goalDefaultLabel }} straight away.</template>
-            <template v-else>Members enter the value each time.</template>
-          </p>
-        </template>
-      </div>
+      <p v-if="tapSummary" class="text-sm text-muted-foreground">{{ tapSummary }}</p>
     </div>
     </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhCheck, PhTarget } from '@phosphor-icons/vue'
+import { PhCheck, PhWarningCircle } from '@phosphor-icons/vue'
 import type { PeriodStatus } from '@/lib/completionStatus'
 defineProps<{ status: PeriodStatus; closed?: boolean }>()
 </script>
@@ -15,8 +15,8 @@ defineProps<{ status: PeriodStatus; closed?: boolean }>()
   <span v-else-if="status.required > 1" class="tabular inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
     {{ status.count }}/{{ status.required }}
   </span>
-  <span v-else-if="status.total > 0" class="inline-flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground" title="Logged, goal not met">
-    <PhTarget :size="15" />
+  <span v-else-if="status.total > 0" class="inline-flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground" title="Logged, not counting">
+    <PhWarningCircle :size="15" />
   </span>
   <span v-else-if="closed" class="inline-flex size-8 items-center justify-center rounded-full bg-missed/10 text-missed" title="Missed">
     <span class="h-0.5 w-3 rounded-full bg-current" />

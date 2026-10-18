@@ -11,18 +11,14 @@ export interface TaskField {
   type: FieldType
   unit?: string
   required: boolean
+  /** number and duration: a value outside min/max is saved but the completion doesn't count */
   min?: number
   max?: number
+  /** number: entries are rounded to the nearest multiple when saved */
   step?: number
   options?: string[]
+  /** set by the admin, never inferred; a one-tap log uses every field's default */
   default?: unknown
-}
-
-export interface TaskTarget {
-  fieldKey: string
-  comparator: '>=' | '<=' | '==' | 'between'
-  value: number
-  valueMax?: number
 }
 
 /** The editable definition of a task, independent of versioning metadata. */
@@ -38,5 +34,4 @@ export interface TaskDefinition {
   requiredCount: number
   completionType: 'checkbox' | 'fields'
   fields: TaskField[]
-  target?: TaskTarget
 }

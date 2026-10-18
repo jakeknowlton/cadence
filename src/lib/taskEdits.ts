@@ -1,4 +1,5 @@
-import type { TaskDefinition, TaskField, TaskTarget } from '@/types/task'
+import type { TaskDefinition, TaskField } from '@/types/task'
+import { hasValue, roundToStep } from './completionStatus'
 
 export type EditClass = 'none' | 'cosmetic' | 'measured' | 'refused'
 
@@ -14,7 +15,7 @@ export function fieldSignature(f: Pick<TaskField, 'type' | 'unit'>): string {
 }
 
 const COSMETIC_KEYS = ['name', 'description', 'icon', 'sortOrder'] as const
-const MEASURED_FIELD_KEYS = ['required', 'min', 'max', 'step', 'options', 'default'] as const
+const MEASURED_FIELD_KEYS = ['required', 'min', 'max', 'step', 'options'] as const
 
 function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
@@ -57,7 +58,6 @@ export function classifyEdit(
     measured.push(`required count ${prev.requiredCount} → ${next.requiredCount}`)
   if (prev.completionType !== next.completionType)
     measured.push(`completion type ${prev.completionType} → ${next.completionType}`)
-  if (!same(prev.target, next.target)) measured.push('target changed')
 
   for (const key of prevFields.keys()) {
     if (!nextFields.has(key)) measured.push(`field "${key}" removed`)
@@ -69,6 +69,8 @@ export function classifyEdit(
       continue
     }
     if (pf.label !== nf.label) cosmetic.push(`field "${key}" label changed`)
+    // A default only changes what new entries start with, never how a period is judged.
+    if (!same(pf.default, nf.default)) cosmetic.push(`field "${key}" default changed`)
     for (const k of MEASURED_FIELD_KEYS) {
       if (!same(pf[k], nf[k])) measured.push(`field "${key}" ${k} changed`)
     }
@@ -105,37 +107,29 @@ export function validateDefinition(def: TaskDefinition): string[] {
     if (f.min !== undefined && f.max !== undefined && f.min > f.max)
       errors.push(`Field "${f.key}" min is greater than max`)
     if (f.step !== undefined && !(f.step > 0)) errors.push(`Field "${f.key}" must round to a number above 0`)
-  }
-
-  if (def.target) {
-    const tf = def.fields.find((f) => f.key === def.target!.fieldKey)
-    if (!tf) errors.push(`Target refers to unknown field "${def.target.fieldKey}"`)
-    else {
-      if (tf.type !== 'number' && tf.type !== 'duration')
-        errors.push('Target field must be a number or duration')
-      if (!tf.required) errors.push('A goal must be on a required field')
-      if (!goalFitsRange(def.target, tf.min, tf.max)) errors.push(`The goal must fall within ${tf.label || tf.key}'s min and max`)
-    }
-    if (def.target.comparator === 'between' && def.target.valueMax === undefined)
-      errors.push('A "between" target needs valueMax')
-    else if (def.target.comparator === 'between' && def.target.valueMax! < def.target.value)
-      errors.push('A "between" goal needs its first value to be the smaller one')
+    errors.push(...defaultErrors(f))
   }
   return errors
 }
 
-/**
- * Whether a goal can be met by a value inside the field's min and max. "At least" and "exactly"
- * goals also become the one-tap default, so the goal amount itself must be in range.
- */
-function goalFitsRange(t: TaskTarget, min = -Infinity, max = Infinity): boolean {
-  switch (t.comparator) {
-    case '>=':
-    case '==':
-      return t.value >= min && t.value <= max
-    case '<=':
-      return t.value >= min
-    case 'between':
-      return t.value <= max && (t.valueMax ?? t.value) >= min
+/** A default must be a valid value for its field, and one that counts, so a one-tap log always counts. */
+function defaultErrors(f: TaskField): string[] {
+  const d = f.default
+  if (!hasValue(d)) return []
+  const name = f.label || f.key
+  switch (f.type) {
+    case 'number':
+    case 'duration':
+      if (typeof d !== 'number') return [`${name}'s default must be a ${f.type === 'number' ? 'number' : 'duration'}`]
+      if ((f.min !== undefined && d < f.min) || (f.max !== undefined && d > f.max)) return [`${name}'s default must be within its min and max`]
+      if (f.type === 'number' && f.step !== undefined && f.step > 0 && roundToStep(d, f.step) !== d)
+        return [`${name}'s default must be a multiple of ${f.step}`]
+      return []
+    case 'boolean':
+      return typeof d === 'boolean' ? [] : [`${name}'s default must be yes or no`]
+    case 'select':
+      return f.options?.includes(d as string) ? [] : [`${name}'s default must be one of its choices`]
+    case 'text':
+      return typeof d === 'string' ? [] : [`${name}'s default must be text`]
   }
 }

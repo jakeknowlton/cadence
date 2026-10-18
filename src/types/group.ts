@@ -38,12 +38,9 @@ export interface Membership {
 }
 
 /** The measured part of a task definition, copied verbatim onto every completion. */
-export type TaskSnapshot = Pick<
-  TaskDefinition,
-  'cadence' | 'activeDays' | 'requiredCount' | 'completionType' | 'fields'
-> & { target: TaskDefinition['target'] | null }
+export type TaskSnapshot = Pick<TaskDefinition, 'cadence' | 'activeDays' | 'requiredCount' | 'completionType' | 'fields'>
 
-export interface TaskVersionDoc extends Omit<TaskDefinition, 'target'> {
+export interface TaskVersionDoc extends TaskDefinition {
   id: string
   taskId: string
   version: number
@@ -52,7 +49,6 @@ export interface TaskVersionDoc extends Omit<TaskDefinition, 'target'> {
   replaces: string | null
   effectiveFrom: string
   effectiveTo: string | null
-  target: TaskDefinition['target'] | null
   fieldKeys: string[]
   /** key -> 'type|unit', cumulative over the task's lineage */
   fieldTypes: Record<string, string>

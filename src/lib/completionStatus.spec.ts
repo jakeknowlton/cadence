@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Timestamp } from 'firebase/firestore'
 import type { TaskSnapshot } from '@/types/group'
 import type { Completion } from '@/types/completion'
-import { entryMisses, formatValue, missingRequiredFields, periodStatus, periodTotals, qualifies, quickValues, roundToStep, totalProgress } from './completionStatus'
+import { dayProgress, entryMisses, formatValue, missingRequiredFields, periodStatus, periodTotals, qualifies, quickValues, roundToStep, totalProgress } from './completionStatus'
 
 const snap = (fields: TaskSnapshot['fields'], requiredCount = 1, cadence: TaskSnapshot['cadence'] = 'daily'): TaskSnapshot =>
   ({ cadence, activeDays: null, requiredCount, completionType: 'fields', fields })
@@ -72,6 +72,23 @@ describe('periodStatus', () => {
   it('counts toward times per period and ignores deleted entries', () => {
     const s = periodStatus(lift, [c(lift, {}), c(lift, {}), { ...c(lift, {}), deletedAt: Timestamp.now() }])
     expect(s).toMatchObject({ count: 2, total: 2, required: 3, complete: false })
+  })
+})
+
+describe('dayProgress', () => {
+  const walk = snap([], 1)
+  const tasks = [{ taskId: 'squats', snapshot: squats }, { taskId: 'walk', snapshot: { ...walk, completionType: 'checkbox' as const } }]
+  const e = (taskId: string, values: Completion['values'] = {}) => ({ ...c(squats, values), taskId })
+  it('done when every daily task is complete', () => {
+    expect(dayProgress(tasks, [e('squats', { squats: 100 }), e('walk')])).toBe('done')
+  })
+  it('partial when anything is logged or complete, even short of a total', () => {
+    expect(dayProgress(tasks, [e('walk')])).toBe('partial')
+    expect(dayProgress(tasks, [e('squats', { squats: 40 })])).toBe('partial')
+  })
+  it('none with nothing logged', () => {
+    expect(dayProgress(tasks, [])).toBe('none')
+    expect(dayProgress(tasks, [{ ...e('walk'), deletedAt: Timestamp.now() }])).toBe('none')
   })
 })
 

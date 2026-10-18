@@ -88,6 +88,19 @@ export function periodStatus(snapshot: TaskSnapshot, completions: Completion[]):
   }
 }
 
+export type DayProgress = 'done' | 'partial' | 'none'
+
+/**
+ * One member's progress on the day's daily tasks, for the Today summary: done when every task is
+ * complete, partial when anything is logged or complete, otherwise none. `entries` are that
+ * member's entries for the day.
+ */
+export function dayProgress(tasks: { taskId: string; snapshot: TaskSnapshot }[], entries: Completion[]): DayProgress {
+  const complete = tasks.filter((t) => periodStatus(t.snapshot, entries.filter((c) => c.taskId === t.taskId)).complete).length
+  if (tasks.length > 0 && complete === tasks.length) return 'done'
+  return complete > 0 || entries.some((c) => !c.deletedAt) ? 'partial' : 'none'
+}
+
 /** Progress toward a period total, such as "60 / 100 reps" or "1850 of 2200 kcal max". */
 export function totalProgress(t: PeriodTotal, field: { type: string; unit?: string }): string {
   const fmt = (n: number) => formatValue(n, field.type, field.unit)

@@ -176,7 +176,7 @@ Members may log, edit, or delete their own completions for any period that ended
 
 ## Logging completions
 
-The Today view is the home screen. It lists every active task across the member's groups, grouped by cadence, with the current period's status: not done, done, or progress toward complete, such as "2 of 3" qualifying entries or "60 / 100 squats" for a period total. Daily tasks do not appear on inactive days.
+The Today view is the home screen. It lists every active task across the member's groups, grouped by cadence, with the current period's status: not done, done, or progress toward complete, such as "2 of 3" qualifying entries or "60 / 100 squats" for a period total. Daily tasks do not appear on inactive days. Under each group's name, a row of member initials shows who has finished today's daily tasks: filled when every daily task that applies today is complete, ringed when something is logged, plain when nothing is, with a count such as "4 of 6 done". Weekly and monthly tasks don't count against anyone here. The row is hidden for a group of one or a day with no daily tasks, and tapping it opens the group page.
 
 A checkbox task completes with one tap and can be undone with another. A field task does the same when every required field has a default, logging every field's default. Any other field task opens a sheet with its fields, and tapping the task's name always opens it. The form marks required fields, which must be filled before saving, and says when the entry will not qualify and why. Any entry can carry a free-text note. Deleting an entry hides it; the record is kept.
 

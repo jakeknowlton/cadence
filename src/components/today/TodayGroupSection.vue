@@ -4,24 +4,25 @@ import { collection, query, where } from 'firebase/firestore'
 import { useCollection } from 'vuefire'
 import { db } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
-import { useGroup } from '@/composables/useGroup'
+import { useGroup, useProfiles } from '@/composables/useGroup'
 import { useLogCompletion } from '@/composables/useLogCompletion'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
 import { currentPeriodKeys, isActiveDay, isWithinEditWindow, periodFor, type DateString } from '@/lib/periods'
-import { periodStatus, quickValues } from '@/lib/completionStatus'
+import { dayProgress, periodStatus, quickValues } from '@/lib/completionStatus'
 import { versionsInEffect } from '@/lib/versions'
 import { iconFor } from '@/lib/icons'
 import { groupBar } from '@/lib/groupColor'
 import { watchEffect } from 'vue'
 import TaskRow from './TaskRow.vue'
 import CompletionSheet from './CompletionSheet.vue'
+import MemberStrip from './MemberStrip.vue'
 
 const props = defineProps<{ groupId: string; date: DateString }>()
 const emit = defineEmits<{ summary: [groupId: string, beats: { id: string; done: boolean }[]] }>()
 
 const authStore = useAuthStore()
-const { group, members, versions, today } = useGroup(() => props.groupId)
+const { group, members, activeMembers, versions, today } = useGroup(() => props.groupId)
 const { log, update, remove } = useLogCompletion()
 
 const keys = computed(() => (group.value ? currentPeriodKeys(props.date, group.value.weekStartsOn) : null))
@@ -42,6 +43,27 @@ const tasks = computed(() =>
     (v) => v.cadence !== 'daily' || isActiveDay(props.date, v.activeDays),
   ),
 )
+// ---- everyone's progress on today's daily tasks ----
+const dailyTasks = computed(() => tasks.value.filter((v) => v.cadence === 'daily'))
+const dayEntries = useCollection<Completion>(
+  computed(() =>
+    keys.value && dailyTasks.value.length
+      ? query(collection(db, 'groups', props.groupId, 'completions'), where('periodKey', '==', keys.value.daily))
+      : null,
+  ),
+)
+const { nameOf } = useProfiles(() => activeMembers.value.map((m) => m.userId))
+/** You first, then everyone else by name. */
+const people = computed(() =>
+  activeMembers.value
+    .map((m) => ({
+      uid: m.userId,
+      name: nameOf(m.userId),
+      progress: dayProgress(dailyTasks.value, dayEntries.value.filter((c) => c.userId === m.userId && !c.deletedAt)),
+    }))
+    .sort((a, b) => Number(b.uid === authStore.uid) - Number(a.uid === authStore.uid) || a.name.localeCompare(b.name)),
+)
+
 function periodOf(v: TaskVersionDoc) {
   return periodFor(props.date, v.cadence, group.value!.weekStartsOn)
 }
@@ -128,6 +150,9 @@ const periodLabel = computed(() => {
       <span class="h-4 w-1 rounded-full" :class="groupBar(group.color)" />
       <component :is="iconFor(group.icon)" :size="16" />
       {{ group.name }}
+    </RouterLink>
+    <RouterLink v-if="dailyTasks.length && people.length > 1" :to="{ name: 'group', params: { id: group.id } }" class="block">
+      <MemberStrip :people="people" />
     </RouterLink>
     <ul class="row-list pb-1.5">
       <TaskRow

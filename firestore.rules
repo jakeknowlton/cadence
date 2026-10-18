@@ -195,9 +195,9 @@ service cloud.firestore {
               && request.resource.data.fieldTypes.diff(prev().fieldTypes).changedKeys().size() == 0
               && request.resource.data.fieldTypes.keys().hasAll(prev().fieldTypes.keys()))
           );
-        // cosmetic edits in place, closing a version, and label-only field edits
+        // cosmetic edits in place (including charts), closing a version, and label- or default-only field edits
         allow update: if isAdmin()
-          && onlyChanged(['name', 'description', 'icon', 'sortOrder', 'effectiveTo', 'fields', 'snapshot', 'updatedAt'])
+          && onlyChanged(['name', 'description', 'icon', 'sortOrder', 'effectiveTo', 'fields', 'charts', 'snapshot', 'updatedAt'])
           && request.resource.data.snapshot.diff(resource.data.snapshot).affectedKeys().hasOnly(['fields']);
         allow delete: if isAdmin();
       }

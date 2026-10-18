@@ -110,6 +110,7 @@ export function cosmeticPatch(def: TaskDefinition): Partial<TaskVersionDoc> {
     icon: def.icon ?? null,
     sortOrder: def.sortOrder,
     fields: def.fields,
+    charts: def.charts ?? [],
     snapshot: snapshotOf(def),
   }) as Partial<TaskVersionDoc>
 }
@@ -152,6 +153,7 @@ export function definitionOf(v: TaskVersionDoc): TaskDefinition {
     requiredCount: v.requiredCount,
     completionType: v.completionType,
     fields: v.fields,
+    charts: v.charts,
   })
 }
 

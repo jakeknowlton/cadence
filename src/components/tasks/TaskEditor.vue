@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { PhPlus, PhTrash } from '@phosphor-icons/vue'
-import type { Cadence, FieldType, TaskDefinition, TaskField, Weekday } from '@/types/task'
+import type { Cadence, FieldType, TaskChart, TaskDefinition, TaskField, Weekday } from '@/types/task'
 import type { TaskVersionDoc } from '@/types/group'
 import { classifyEdit, validateDefinition, type EditClassification } from '@/lib/taskEdits'
 import { effectiveFromForChange } from '@/lib/versions'
 import { hasValue } from '@/lib/completionStatus'
+import { AGG_LABELS } from '@/lib/charts'
 import type { DateString } from '@/lib/periods'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -109,12 +110,38 @@ function removeField(i: number) {
   const f = def.fields[i]!
   def.fields.splice(i, 1)
   delete optionsText[f.key]
+  def.charts = def.charts?.filter((c) => c.a !== f.key && c.b !== f.key)
 }
 function onLabelInput(f: TaskField) {
   // New fields take their key from the label until first saved; existing keys never change.
   if (!lockedKeys.value.has(f.key) && !props.current?.fieldKeys.includes(f.key)) {
+    const old = f.key
     f.key = keyFor(f.label || 'field', def.fields.filter((x) => x !== f).map((x) => x.key))
+    for (const c of def.charts ?? []) {
+      if (c.a === old) c.a = f.key
+      if (c.b === old) c.b = f.key
+    }
   }
+}
+
+// ---- charts ----
+const measureFields = computed(() => def.fields.filter((f) => f.type === 'number' || f.type === 'duration'))
+const measureOptions = computed(() => measureFields.value.map((f) => ({ value: f.key, label: f.label || f.key })))
+const OPS = [
+  { value: '', label: 'on its own' },
+  { value: '/', label: '÷ divided by' },
+  { value: '*', label: '× times' },
+]
+const aggOptions = (c: TaskChart) =>
+  (Object.keys(AGG_LABELS) as TaskChart['agg'][]).filter((a) => !(c.op === '/' && a === 'sum')).map((a) => ({ value: a, label: AGG_LABELS[a] }))
+function addChart() {
+  def.charts = [...(def.charts ?? []), { name: '', a: measureFields.value[0]?.key ?? '', agg: 'sum' }]
+}
+function setOp(c: TaskChart, op: string) {
+  c.op = op === '/' || op === '*' ? op : undefined
+  if (c.op && !c.b) c.b = measureFields.value.find((f) => f.key !== c.a)?.key ?? c.a
+  // Adding up ratios means nothing, so a divided chart starts as an average.
+  if (c.op === '/' && c.agg === 'sum') c.agg = 'avg'
 }
 function syncOptions(f: TaskField) {
   f.options = (optionsText[f.key] ?? '')
@@ -157,6 +184,9 @@ const normalized = computed<TaskDefinition>(() => ({
       default: defaultFor(f),
     }
   }),
+  charts: def.completionType === 'fields' && def.charts?.length
+    ? def.charts.map((c) => ({ name: c.name.trim(), a: c.a, op: c.op, b: c.op ? c.b : undefined, agg: c.agg }))
+    : undefined,
 }))
 /** The default in the field's own type, or undefined; leftovers from a type change are dropped. */
 function defaultFor(f: TaskField): unknown {
@@ -194,7 +224,7 @@ const classification = computed<EditClassification>(() =>
 const definitionOfCurrent = computed<TaskDefinition>(() => {
   const c = props.current!
   return { name: c.name, description: c.description, icon: c.icon, sortOrder: c.sortOrder, cadence: c.cadence,
-    activeDays: c.activeDays, requiredCount: c.requiredCount, completionType: c.completionType, fields: c.fields }
+    activeDays: c.activeDays, requiredCount: c.requiredCount, completionType: c.completionType, fields: c.fields, charts: c.charts }
 })
 const effectiveFrom = computed(() =>
   props.current
@@ -373,6 +403,38 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
 
       <p v-if="tapSummary" class="text-sm text-muted-foreground">{{ tapSummary }}</p>
     </div>
+    </div>
+
+    <div v-if="def.completionType === 'fields' && measureFields.length" class="panel grid gap-4 p-4">
+      <div>
+        <p class="text-base font-semibold">Charts</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          What everyone sees on the Stats page. Divide two fields for things like time per mile.
+          <template v-if="!def.charts?.length"> With none set, Stats shows a total for each number and duration field.</template>
+        </p>
+      </div>
+      <div v-for="(c, i) in def.charts ?? []" :key="i" class="grid gap-3 rounded-xl bg-muted/60 p-3">
+        <div class="grid grid-cols-[1fr_auto] gap-2">
+          <Input v-model="c.name" :aria-label="`Chart ${i + 1} name`" placeholder="Name (e.g. Pace)" maxlength="40" />
+          <Button type="button" variant="ghost" size="icon" aria-label="Remove chart" @click="def.charts!.splice(i, 1)">
+            <PhTrash :size="18" />
+          </Button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <SelectField v-model="c.a" :label="`Chart ${i + 1} field`" :options="measureOptions" />
+          <SelectField :model-value="c.op ?? ''" :label="`Chart ${i + 1} operation`" :options="OPS" @update:model-value="setOp(c, $event)" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <SelectField v-if="c.op" :model-value="c.b ?? ''" :label="`Chart ${i + 1} second field`" :options="measureOptions" @update:model-value="c.b = $event" />
+          <div :class="c.op ? '' : 'col-span-2'">
+            <SelectField v-model="c.agg" :label="`Chart ${i + 1} combine`" :options="aggOptions(c)" />
+          </div>
+        </div>
+      </div>
+      <Button type="button" variant="outline" @click="addChart">
+        <PhPlus :size="16" weight="bold" />
+        Add chart
+      </Button>
     </div>
 
     <Alert v-if="errors.length" variant="destructive">

@@ -79,7 +79,7 @@ groups/{groupId}/taskVersions/{versionId}
   effectiveTo: 'YYYY-MM-DD' | null
   name, description, icon, sortOrder                       // cosmetic
   cadence, activeDays, requiredCount, completionType,      // measured
-  fields: TaskField[]
+  fields: TaskField[], charts?: TaskChart[]   // charts are display only
   fieldKeys: string[]               // fields[].key, for rules
   fieldTypes: { [key]: 'type|unit' } // for the type/unit lock in rules
   snapshot: { …measured fields… }   // canonical copy completions must match
@@ -121,6 +121,14 @@ interface TaskField {
   default?: unknown                 // set by the admin, never inferred; one tap logs defaults
 }
 
+interface TaskChart {               // on taskVersions as charts?: TaskChart[]; not in the snapshot
+  name: string
+  a: string                         // field key
+  op?: '/' | '*'
+  b?: string                        // second field key when op is set
+  agg: 'sum' | 'avg' | 'min' | 'max'
+}
+
 interface NotificationPrefs {
   onMemberCompletion: { enabled: boolean; cadences: Cadence[]; taskIds: string[] | null }
   quietHours?: { start: string; end: string }
@@ -150,7 +158,7 @@ Rules read the caller's user doc for status and role, and the group doc for memb
 | invites | admin; or a signed-in user with a verified email equal to the invite's, for that one document | create: admin; update: admin to revoke, or the invitee to accept in the same batch that creates their profile |
 | groups | member, former member, or admin | admin; `weekStartsOn` only while `weekStartLocked` is false; `archivedTaskIds` a list; a member may set `weekStartLocked` to true; delete: admin |
 | members | member or admin | admin; or the owner, changing only `notifications`; delete: admin |
-| taskVersions | member, former member, or admin | admin; a new version must link `prevVersionId`, increment `version`, and keep every shared key's `fieldTypes` entry unchanged (`diff().changedKeys()` is empty); an update may touch only cosmetic fields, `effectiveTo`, and field labels; delete: admin |
+| taskVersions | member, former member, or admin | admin; a new version must link `prevVersionId`, increment `version`, and keep every shared key's `fieldTypes` entry unchanged (`diff().changedKeys()` is empty); an update may touch only cosmetic fields, `charts`, `effectiveTo`, and field labels and defaults; delete: admin |
 | completions | member, admin, or the completion's owner (also via collection group) | create: member, `userId` is the caller, `groupId` matches, `taskSnapshot` equals the version's `snapshot`, `values` keys within `fieldKeys`, `periodKey` matches the pattern and its prefix matches `cadence`, `weekStartsOn` matches the group, `completedAt` within `editWindowDays` plus two days of server time; update: owner under the same time check (values, note, soft-delete), or admin; hard delete: admin only, when deleting a task or group |
 | notifications/items | owner, or admin (to clean up a delete) | create: an active member of the group, for another member of the same group, as themselves, with the deterministic id; update: owner, `readAt` only; delete: owner or admin |
 

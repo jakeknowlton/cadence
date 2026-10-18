@@ -8,12 +8,11 @@ import { useGroup, useProfiles } from '@/composables/useGroup'
 import type { Completion } from '@/types/completion'
 import { localDate, shiftDays } from '@/lib/periods'
 import { computeStats, rateSeries, valueSeries, type Bucket } from '@/lib/stats'
-import { formatValue } from '@/lib/completionStatus'
+import { AGG_LABELS, chartFormat, chartSeries, chartsFor, chartSummary, formatChartValue } from '@/lib/charts'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import TrendChart from '@/components/groups/TrendChart.vue'
 import SelectField from '@/components/ui/SelectField.vue'
-import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import { Label } from '@/components/ui/label'
 
 const route = useRoute()
@@ -61,14 +60,21 @@ const perMember = computed(() =>
   }),
 )
 
-const numericField = computed(() => task.value?.fields.find((f) => f.type === 'number' || f.type === 'duration') ?? null)
-const fieldAgg = ref<'sum' | 'avg'>('sum')
 const seriesOpts = computed(() => ({ from: from.value, to: today.value, bucket: bucket.value, weekStartsOn: group.value?.weekStartsOn ?? 1 }))
-const valueChart = computed(() =>
-  numericField.value
-    ? perMember.value.map((p) => ({ label: p.name, points: valueSeries(p.completions, { ...seriesOpts.value, fieldKey: numericField.value!.key, agg: fieldAgg.value }) }))
-    : [],
-)
+/** The admin's charts for this task (or a Total per number and duration field), each with its formatting and per-member data. */
+const charts = computed(() => {
+  if (!task.value) return []
+  const fields = task.value.fields
+  return chartsFor(fields, task.value.charts).map((chart) => {
+    const format = chartFormat(chart, fields)
+    return {
+      chart,
+      format,
+      series: perMember.value.map((p) => ({ label: p.name, points: chartSeries(chart, p.completions, { ...seriesOpts.value, scale: format.scale }) })),
+      summaries: perMember.value.map((p) => chartSummary(chart, p.completions, from.value, today.value, format.scale)),
+    }
+  })
+})
 const countChart = computed(() => perMember.value.map((p) => ({ label: p.name, points: valueSeries(p.completions, { ...seriesOpts.value, agg: 'count' }) })))
 const rateChart = computed(() => perMember.value.map((p) => ({ label: p.name, points: rateSeries(p.stats.segments, from.value, today.value) })))
 const markers = computed(() => lineage.value.filter((v) => v.version > 1).map((v) => v.effectiveFrom))
@@ -98,7 +104,7 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
 
       <template v-if="task">
         <div class="mt-6 grid gap-3">
-          <div v-for="p in perMember" :key="p.member.id" class="panel p-4">
+          <div v-for="(p, pi) in perMember" :key="p.member.id" class="panel p-4">
             <div class="flex items-baseline justify-between gap-3">
               <h2 class="truncate text-base">{{ p.name }}</h2>
               <span v-if="p.stats.segments.length === 0" class="text-sm text-muted-foreground">No periods in range</span>
@@ -117,14 +123,13 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
                 <div class="text-xs text-muted-foreground">best</div>
               </div>
             </div>
-            <dl v-if="p.stats.fields.length" class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-              <template v-for="f in task.fields.filter((f) => f.type === 'number' || f.type === 'duration')" :key="f.key">
-                <div v-if="p.stats.fields.find((x) => x.key === f.key)" class="flex gap-1.5">
-                  <dt class="text-muted-foreground">{{ f.label }}</dt>
+            <dl v-if="charts.some((c) => c.summaries[pi]!.entries > 0)" class="mt-3 grid gap-1 text-sm">
+              <template v-for="(c, ci) in charts" :key="ci">
+                <div v-if="c.summaries[pi]!.entries > 0" class="flex flex-wrap gap-x-1.5">
+                  <dt class="text-muted-foreground">{{ c.chart.name }}</dt>
                   <dd class="tabular font-medium">
-                    {{ formatValue(p.stats.fields.find((x) => x.key === f.key)!.sum, f.type, f.unit) }} total,
-                    {{ formatValue(+p.stats.fields.find((x) => x.key === f.key)!.avg.toFixed(1), f.type, f.unit) }} avg
-                    <span class="font-normal text-muted-foreground">({{ p.stats.fields.find((x) => x.key === f.key)!.count }} {{ p.stats.fields.find((x) => x.key === f.key)!.count === 1 ? 'entry' : 'entries' }})</span>
+                    {{ formatChartValue(c.summaries[pi]!.value, c.format) }}
+                    <span class="font-normal text-muted-foreground">{{ AGG_LABELS[c.chart.agg].toLowerCase() }}, {{ c.summaries[pi]!.entries }} {{ c.summaries[pi]!.entries === 1 ? 'entry' : 'entries' }}</span>
                   </dd>
                 </div>
               </template>
@@ -133,12 +138,10 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
         </div>
 
         <div class="mt-8 grid gap-6">
-          <div v-if="numericField" class="panel p-4">
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="text-base">{{ numericField.label }} per {{ bucket }}</h2>
-              <SegmentedControl v-model="fieldAgg" :options="[{ value: 'sum', label: 'Total' }, { value: 'avg', label: 'Average' }]" label="Aggregate" />
-            </div>
-            <TrendChart class="mt-3" :series="valueChart" kind="line" :markers="markers" />
+          <div v-for="(c, ci) in charts" :key="ci" class="panel p-4">
+            <h2 class="text-base">{{ c.chart.name }} per {{ bucket }}</h2>
+            <p class="text-sm text-muted-foreground">{{ AGG_LABELS[c.chart.agg] }}</p>
+            <TrendChart class="mt-3" :series="c.series" kind="line" :markers="markers" :format="(v) => formatChartValue(v, c.format)" />
           </div>
           <div class="panel p-4">
             <h2 class="text-base">Completions per {{ bucket }}</h2>

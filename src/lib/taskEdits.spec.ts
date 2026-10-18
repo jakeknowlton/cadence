@@ -37,6 +37,12 @@ describe('classifyEdit', () => {
     expect(classifyEdit(run, redefaulted).class).toBe('cosmetic')
   })
 
+  it('charts are cosmetic, and an empty list equals none', () => {
+    const pace = { name: 'Pace', a: 'time', op: '/' as const, b: 'miles', agg: 'avg' as const }
+    expect(classifyEdit(run, edit({ charts: [pace] })).class).toBe('cosmetic')
+    expect(classifyEdit(run, edit({ charts: [] })).class).toBe('none')
+  })
+
   it('cadence, active days, required count, and completion type are measured', () => {
     expect(classifyEdit(run, edit({ cadence: 'weekly' })).class).toBe('measured')
     expect(classifyEdit(run, edit({ activeDays: [1, 2, 3, 4, 5] })).class).toBe('measured')
@@ -117,5 +123,14 @@ describe('validateDefinition', () => {
     expect(one({ key: 'ok', label: 'OK', type: 'boolean', required: true, default: false })).toEqual([])
     expect(one({ key: 'mood', label: 'Mood', type: 'select', required: false, options: ['good', 'bad'], default: 'meh' })).toContain("Mood's default must be one of its choices")
     expect(one({ key: 'mood', label: 'Mood', type: 'select', required: false, options: ['good', 'bad'], default: 'good' })).toEqual([])
+  })
+  it('charts use number or duration fields, never total a ratio, and never multiply two durations', () => {
+    const chart = (c: object) => validateDefinition(edit({ charts: [{ name: 'C', a: 'miles', agg: 'sum', ...c }] }))
+    expect(chart({ op: '/', b: 'time', agg: 'avg' })).toEqual([])
+    expect(chart({ a: 'nope' })).toContain('C must use a number or duration field')
+    expect(chart({ op: '/', b: 'nope', agg: 'avg' })).toContain('C needs a second number or duration field')
+    expect(chart({ op: '/', b: 'time' })).toContain('C divides, so it can show Average, Min, or Max, not Total')
+    expect(chart({ a: 'time', op: '*', b: 'time' })).toContain("C can't multiply two durations")
+    expect(chart({ name: ' ' })).toContain('Every chart needs a name')
   })
 })

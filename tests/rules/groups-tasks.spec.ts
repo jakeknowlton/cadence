@@ -104,10 +104,11 @@ describe('task versions', () => {
     await assertFails(setDoc(doc(db, 'groups', GROUP, 'taskVersions', 'v2'), { ...wrongTask, createdAt: serverTimestamp() }))
   })
 
-  it('in-place edits are limited to cosmetic fields, closing, and field labels', async () => {
+  it('in-place edits are limited to cosmetic fields, charts, closing, and field labels', async () => {
     const db = asUser(env, ADMIN)
     const ref = doc(db, 'groups', GROUP, 'taskVersions', 'v1')
     await assertSucceeds(updateDoc(ref, { name: 'Run', icon: 'Sneaker', sortOrder: 2, effectiveTo: '2026-10-15' }))
+    await assertSucceeds(updateDoc(ref, { charts: [{ name: 'Pace', a: 'time', op: '/', b: 'miles', agg: 'avg' }] }))
     await assertFails(updateDoc(ref, { cadence: 'weekly' }))
     await assertFails(updateDoc(ref, { requiredCount: 2 }))
     await assertFails(updateDoc(ref, { 'snapshot.cadence': 'weekly' }))

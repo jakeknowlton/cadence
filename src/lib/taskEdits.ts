@@ -1,4 +1,4 @@
-import type { TaskDefinition, TaskField } from '@/types/task'
+import type { TaskChart, TaskDefinition, TaskField } from '@/types/task'
 import { hasValue, roundToStep } from './completionStatus'
 
 export type EditClass = 'none' | 'cosmetic' | 'measured' | 'refused'
@@ -51,6 +51,8 @@ export function classifyEdit(
   for (const k of COSMETIC_KEYS) {
     if (!same(prev[k], next[k])) cosmetic.push(`${k} changed`)
   }
+  // Charts only change how stats are drawn, never how a period is judged.
+  if (!same(prev.charts?.length ? prev.charts : null, next.charts?.length ? next.charts : null)) cosmetic.push('charts changed')
 
   if (prev.cadence !== next.cadence) measured.push(`cadence ${prev.cadence} → ${next.cadence}`)
   if (!same(prev.activeDays, next.activeDays)) measured.push('active days changed')
@@ -109,6 +111,23 @@ export function validateDefinition(def: TaskDefinition): string[] {
     if (f.step !== undefined && !(f.step > 0)) errors.push(`Field "${f.key}" must round to a number above 0`)
     errors.push(...defaultErrors(f))
   }
+  for (const c of def.charts ?? []) errors.push(...chartErrors(c, def.fields))
+  return errors
+}
+
+const isMeasure = (f: TaskField | undefined) => f?.type === 'number' || f?.type === 'duration'
+
+/** Problems with one chart's definition against the task's fields. */
+export function chartErrors(chart: TaskChart, fields: TaskField[]): string[] {
+  const name = chart.name.trim() || 'A chart'
+  const errors: string[] = []
+  if (!chart.name.trim()) errors.push('Every chart needs a name')
+  const a = fields.find((f) => f.key === chart.a)
+  const b = chart.op ? fields.find((f) => f.key === chart.b) : undefined
+  if (!isMeasure(a)) errors.push(`${name} must use a number or duration field`)
+  if (chart.op && !isMeasure(b)) errors.push(`${name} needs a second number or duration field`)
+  if (chart.op === '/' && chart.agg === 'sum') errors.push(`${name} divides, so it can show Average, Min, or Max, not Total`)
+  if (chart.op === '*' && a?.type === 'duration' && b?.type === 'duration') errors.push(`${name} can't multiply two durations`)
   return errors
 }
 

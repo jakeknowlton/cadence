@@ -135,7 +135,7 @@ Every completion keeps a snapshot of the task version it was logged against, so 
 
 | Class | Changes | Effect |
 |-------|---------|--------|
-| **Cosmetic** | Name, description, icon, sort order, field labels, field defaults | Applied in place. History shows the new name. A default only affects what new entries start with, never how a period is judged. |
+| **Cosmetic** | Name, description, icon, sort order, field labels, field defaults, charts | Applied in place. History shows the new name. Defaults and charts never change how a period is judged; changed charts redraw all history. |
 | **Measured** | Cadence, active days, required count, completion type, adding or removing a field, a field's required flag, min, max, rounding, or choices | A new task version takes effect at the start of the next period. Past periods keep the old definition. |
 | **Refused** | Changing an existing field's type or unit, or reusing a removed field's key with a different type or unit | Not allowed. The editor offers **Replace task** instead. |
 
@@ -183,16 +183,30 @@ Stats are per member per task over a date range the viewer chooses, defaulting t
 | Completion rate | Complete periods divided by complete plus missed periods. Inactive periods are excluded. Per cadence segment. |
 | Current streak | Consecutive active periods, ending at the current or most recent period, that are complete. Inactive periods are skipped, not broken. Per cadence segment. |
 | Longest streak | The longest such run in the range. Per cadence segment. |
-| Field total, average, min, max | Over all completions with a value in that field, counting or not. A run that fell short still ran miles. Blank entries are left out, and the average says how many entries it covers. |
+| Task charts | Each of the task's charts, over the range; see **Task charts**. |
 | Group completion rate | The mean of members' completion rates. |
 
 ### Charts
 
 Charts are the primary way members see progress over time. Each chart shows one member or all members overlaid, bucketed by week or by month regardless of the task's cadence, with a marker wherever the task version changed.
 
-- Value over time: the total or average of one field per bucket, such as miles per week or weight per month.
+- The task's own charts, below.
 - Completions over time: counting completions per bucket.
 - Completion rate over time: per month, per cadence segment.
+
+#### Task charts
+
+An admin defines each task's charts in the task editor, and every member sees the same ones. The app never guesses what a field means; a chart says what to plot.
+
+| Setting | Options |
+|---------|---------|
+| Name | Free text, such as "Pace". |
+| Value | One number or duration field, or two of them divided (÷) or multiplied (×). |
+| Combine by | Total, Average, Min, or Max, per bucket and over the date range. A divided value cannot be totalled. |
+
+How values read follows from the field types: a duration divided by a number is time per unit ("9:12 /mi"), a number divided by a duration is per hour ("6.5 mi/h"), and anything else is a plain number or duration. The average of a divided value is total over total, so a five-mile run weighs more than a quarter mile; min and max use each entry's own value. Entries missing a field a chart needs are left out of that chart, and every logged entry is included whether it counted or not. Each member's stats card shows every chart's value over the date range with the number of entries it covers.
+
+A task with no charts set shows a Total chart for each number and duration field. Charts are display only: they are never stored on completions and never affect whether a completion counts.
 
 Stats and charts are computed in the app from the completions of one task at a time, which at a group's scale is a few thousand records at most.
 

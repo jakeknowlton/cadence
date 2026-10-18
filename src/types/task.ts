@@ -21,6 +21,18 @@ export interface TaskField {
   default?: unknown
 }
 
+/**
+ * A chart on the stats page, defined by the admin. Its value is one field, or two fields divided or
+ * multiplied, combined per week or month. Display only: never stored per completion or used for counting.
+ */
+export interface TaskChart {
+  name: string
+  a: string
+  op?: '/' | '*'
+  b?: string
+  agg: 'sum' | 'avg' | 'min' | 'max'
+}
+
 /** The editable definition of a task, independent of versioning metadata. */
 export interface TaskDefinition {
   // cosmetic
@@ -34,4 +46,7 @@ export interface TaskDefinition {
   requiredCount: number
   completionType: 'checkbox' | 'fields'
   fields: TaskField[]
+  // display
+  /** none or empty: one Total chart per number and duration field */
+  charts?: TaskChart[]
 }

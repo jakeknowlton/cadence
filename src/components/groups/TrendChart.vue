@@ -14,6 +14,8 @@ const props = defineProps<{
   /** bucket keys where a task version changed; drawn as dashed vertical lines */
   markers?: string[]
   percent?: boolean
+  /** formats y-axis ticks and tooltips, e.g. as durations or with a unit */
+  format?: (value: number) => string
 }>()
 
 function cssVar(name: string) {
@@ -64,9 +66,14 @@ const markerPlugin = computed<Plugin>(() => ({
 const options = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: props.series.length > 1, position: 'bottom' as const, labels: { color: tickColor.value, boxWidth: 10, boxHeight: 10, usePointStyle: true } } },
+  plugins: {
+    legend: { display: props.series.length > 1, position: 'bottom' as const, labels: { color: tickColor.value, boxWidth: 10, boxHeight: 10, usePointStyle: true } },
+    ...(props.format
+      ? { tooltip: { callbacks: { label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => `${ctx.dataset.label ?? ''}: ${ctx.parsed.y === null ? '—' : props.format!(ctx.parsed.y)}` } } }
+      : {}),
+  },
   scales: {
-    y: { beginAtZero: true, grid: { color: gridColor.value }, ticks: { color: tickColor.value, precision: props.kind === 'bar' ? 0 : undefined, ...(props.percent ? { callback: (v: number | string) => `${v}%` } : {}) }, ...(props.percent ? { max: 100 } : {}) },
+    y: { beginAtZero: true, grid: { color: gridColor.value }, ticks: { color: tickColor.value, precision: props.kind === 'bar' ? 0 : undefined, ...(props.percent ? { callback: (v: number | string) => `${v}%` } : props.format ? { callback: (v: number | string) => props.format!(Number(v)) } : {}) }, ...(props.percent ? { max: 100 } : {}) },
     x: { grid: { display: false }, ticks: { color: tickColor.value, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
   },
 }))

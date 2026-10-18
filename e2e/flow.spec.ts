@@ -74,7 +74,20 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.getByLabel('Min').fill('1')
   await page.getByLabel('Default').fill('1')
   await page.getByLabel('Required').click()
+  await page.getByRole('button', { name: /add field/i }).click()
+  await page.getByPlaceholder('Label (e.g. Distance)').nth(1).fill('Time')
+  await page.getByRole('combobox', { name: 'Field type' }).nth(1).click()
+  await page.getByRole('option', { name: 'Duration' }).click()
   await expect(page.getByText(/logs it in one tap/)).toBeVisible()
+  // a pace chart: time divided by distance
+  await page.getByRole('button', { name: 'Add chart' }).click()
+  await page.getByLabel('Chart 1 name').fill('Pace')
+  await page.getByRole('combobox', { name: 'Chart 1 field' }).click()
+  await page.getByRole('option', { name: 'Time' }).click()
+  await page.getByRole('combobox', { name: 'Chart 1 operation' }).click()
+  await page.getByRole('option', { name: '÷ divided by' }).click()
+  await expect(page.getByRole('combobox', { name: 'Chart 1 second field' })).toHaveText('Distance')
+  await expect(page.getByRole('combobox', { name: 'Chart 1 combine' })).toHaveText('Average')
   await page.getByRole('button', { name: 'Create task' }).click()
   await expect(page.getByText('Run a mile')).toBeVisible()
 
@@ -104,6 +117,20 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.getByRole('link', { name: 'Test Crew' }).first().click()
   await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
   await expect(page.getByText(/Admin did Drink water/)).toBeVisible()
+
+  // --- stats show the admin's chart, formatted from the field types ---
+  await page.goto('/')
+  await run.getByRole('button', { name: /Run a mile/ }).click()
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByLabel(/Distance/).fill('2')
+  await page.getByLabel(/Time/).fill('18:24')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await page.getByRole('link', { name: 'Test Crew' }).first().click()
+  await page.getByRole('link', { name: 'Stats' }).click()
+  await page.locator('#s-task').click()
+  await page.getByRole('option', { name: 'Run a mile' }).click()
+  await expect(page.getByRole('heading', { name: 'Pace per week' })).toBeVisible()
+  await expect(page.getByText('9:12 /mi')).toBeVisible()
 
   // --- archiving a task hides it from members at once; deleting removes it ---
   await page.goto('/admin/groups')

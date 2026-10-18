@@ -183,7 +183,7 @@ export function bucketKey(day: DateString, bucket: Bucket, weekStartsOn: Weekday
   return periodFor(day, bucket === 'week' ? 'weekly' : 'monthly', weekStartsOn).start
 }
 
-function bucketLabel(start: DateString, bucket: Bucket): string {
+export function bucketLabel(start: DateString, bucket: Bucket): string {
   const [y, m, d] = start.split('-')
   return bucket === 'month' ? `${y}-${m}` : `${m}/${d}`
 }

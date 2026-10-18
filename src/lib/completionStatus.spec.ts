@@ -2,95 +2,101 @@ import { describe, expect, it } from 'vitest'
 import { Timestamp } from 'firebase/firestore'
 import type { TaskSnapshot } from '@/types/group'
 import type { Completion } from '@/types/completion'
-import { formatValue, isCounting, roundToStep, missingRequiredFields, outOfRangeFields, parseDuration, periodStatus, quickValues } from './completionStatus'
+import { entryMisses, formatValue, missingRequiredFields, parseDuration, periodStatus, periodTotals, qualifies, quickValues, roundToStep, totalProgress } from './completionStatus'
 
-const snap = (fields: TaskSnapshot['fields'], requiredCount = 1): TaskSnapshot =>
-  ({ cadence: 'daily', activeDays: null, requiredCount, completionType: 'fields', fields })
+const snap = (fields: TaskSnapshot['fields'], requiredCount = 1, cadence: TaskSnapshot['cadence'] = 'daily'): TaskSnapshot =>
+  ({ cadence, activeDays: null, requiredCount, completionType: 'fields', fields })
 
 // The spec's examples.
 const track = snap([{ key: 'kcal', label: 'Calories', type: 'number', unit: 'kcal', required: true }])
-const under = snap([{ key: 'kcal', label: 'Calories', type: 'number', unit: 'kcal', required: false, max: 2200 }])
-const run = snap([
-  { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 1, default: 1 },
-  { key: 'time', label: 'Time', type: 'duration', required: false },
-])
-const fast = snap([
+const under = snap([{ key: 'kcal', label: 'Calories', type: 'number', unit: 'kcal', required: false, totalMax: 2200 }])
+const squats = snap([{ key: 'squats', label: 'Squats', type: 'number', required: true, totalMin: 100, default: 100 }])
+const fastMile = snap([
   { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 1, default: 1 },
   { key: 'time', label: 'Time', type: 'duration', required: true, max: 600 },
 ])
+const sets = snap([{ key: 'reps', label: 'Reps', type: 'number', required: true, min: 12, default: 12 }], 3)
+const weekly = snap([{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, totalMin: 10 }], 3, 'weekly')
 const stretch = snap([{ key: 'notes', label: 'Notes', type: 'text', required: false }])
 const lift: TaskSnapshot = { cadence: 'weekly', activeDays: null, requiredCount: 3, completionType: 'checkbox', fields: [] }
 
 function c(snapshot: TaskSnapshot, values: Completion['values'], at = 0): Completion {
-  return { id: 'x', userId: 'u', groupId: 'g', taskId: 't', taskVersionId: 'v', taskName: 'T', cadence: snapshot.cadence, periodKey: 'd:2026-10-15', weekStartsOn: 1,
+  return { id: `x${at}${Math.random()}`, userId: 'u', groupId: 'g', taskId: 't', taskVersionId: 'v', taskName: 'T', cadence: snapshot.cadence, periodKey: 'd:2026-10-15', weekStartsOn: 1,
     completedAt: Timestamp.fromMillis(at), loggedAt: Timestamp.fromMillis(at), values, note: null, taskSnapshot: snapshot, deletedAt: null }
 }
+const day = (s: TaskSnapshot, ...values: Completion['values'][]) => periodStatus(s, values.map((v, i) => c(s, v, i)))
 
-describe('isCounting', () => {
-  it('visibility only: any value in a required field counts, blank does not', () => {
-    expect(isCounting(track, { kcal: 4000 })).toBe(true)
-    expect(isCounting(track, { kcal: null })).toBe(false)
-    expect(missingRequiredFields(track, {})).toEqual(['kcal'])
+describe('qualifies', () => {
+  it('with no per-entry limits every entry qualifies, even a blank one', () => {
+    expect(qualifies(track, { kcal: 4000 })).toBe(true)
+    expect(qualifies(stretch, {})).toBe(true)
   })
-  it('an optional field with a max: blank counts, inside counts, outside does not', () => {
-    expect(isCounting(under, {})).toBe(true)
-    expect(isCounting(under, { kcal: 1850 })).toBe(true)
-    expect(isCounting(under, { kcal: 2200 })).toBe(true)
-    expect(isCounting(under, { kcal: 2400 })).toBe(false)
+  it('one entry must meet every per-entry limit at once', () => {
+    expect(qualifies(fastMile, { miles: 1, time: 570 })).toBe(true)
+    expect(qualifies(fastMile, { miles: 1, time: 720 })).toBe(false)
+    expect(qualifies(fastMile, { miles: 0.5, time: 240 })).toBe(false)
   })
-  it('a min, and every field must be in range', () => {
-    expect(isCounting(run, { miles: 1.5 })).toBe(true)
-    expect(isCounting(run, { miles: 0.5 })).toBe(false)
-    expect(isCounting(fast, { miles: 1, time: 540 })).toBe(true)
-    expect(isCounting(fast, { miles: 1, time: 660 })).toBe(false)
-    expect(isCounting(fast, { miles: 1 })).toBe(false)
-  })
-  it('min equal to max means exactly', () => {
-    const exact = snap([{ key: 'reps', label: 'Reps', type: 'number', required: true, min: 10, max: 10 }])
-    expect(isCounting(exact, { reps: 10 })).toBe(true)
-    expect(isCounting(exact, { reps: 11 })).toBe(false)
-  })
-  it('zero is a value, and a yes/no answered No is a value', () => {
-    expect(isCounting(track, { kcal: 0 })).toBe(true)
-    const took = snap([{ key: 'took', label: 'Took vitamins', type: 'boolean', required: true }])
-    expect(isCounting(took, { took: false })).toBe(true)
-    expect(isCounting(took, { took: null })).toBe(false)
-  })
-})
-
-describe('outOfRangeFields', () => {
-  it('names the field and the limit it crossed', () => {
-    expect(outOfRangeFields(fast, { miles: 0.5, time: 660 })).toEqual([
-      { key: 'miles', side: 'min', limit: 1 },
-      { key: 'time', side: 'max', limit: 600 },
-    ])
-    expect(outOfRangeFields(under, {})).toEqual([])
+  it('a blank value misses a limit on its field', () => {
+    expect(entryMisses(fastMile, { miles: 1 })).toEqual([{ key: 'time', side: 'max', limit: 600, blank: true }])
   })
 })
 
 describe('periodStatus', () => {
-  it('counts toward requiredCount and ignores soft-deleted completions', () => {
+  it('visibility only: any entry completes the day', () => {
+    expect(day(track, { kcal: 4000 }).complete).toBe(true)
+    expect(day(track).complete).toBe(false)
+  })
+  it('a total max adds up meals; an empty entry completes it', () => {
+    expect(day(under, { kcal: 600 }, { kcal: 900 }).complete).toBe(true)
+    expect(day(under, { kcal: 1200 }, { kcal: 1200 }).complete).toBe(false)
+    expect(day(under, {}).complete).toBe(true)
+  })
+  it('a total min adds up spread-out entries', () => {
+    expect(day(squats, { squats: 40 })).toMatchObject({ complete: false, totals: [{ key: 'squats', sum: 40, min: 100, ok: false }] })
+    expect(day(squats, { squats: 40 }, { squats: 60 }).complete).toBe(true)
+  })
+  it('a slow mile plus a fast half mile does not make a fast mile', () => {
+    expect(day(fastMile, { miles: 1, time: 720 }, { miles: 0.5, time: 240 }).complete).toBe(false)
+    expect(day(fastMile, { miles: 1, time: 720 }, { miles: 1, time: 570 }).complete).toBe(true)
+  })
+  it('sets: enough qualifying entries, extra short ones are fine', () => {
+    expect(day(sets, { reps: 12 }, { reps: 13 }, { reps: 14 }, { reps: 15 }, { reps: 16 })).toMatchObject({ count: 5, complete: true })
+    expect(day(sets, { reps: 12 }, { reps: 12 }, { reps: 10 })).toMatchObject({ count: 2, total: 3, complete: false })
+    expect(day(sets, { reps: 12 }, { reps: 12 }, { reps: 12 }, { reps: 8 }).complete).toBe(true)
+  })
+  it('a count and a total together', () => {
+    expect(day(weekly, { miles: 4 }, { miles: 4 }, { miles: 2 }).complete).toBe(true)
+    expect(day(weekly, { miles: 6 }, { miles: 5 }).complete).toBe(false)
+    expect(day(weekly, { miles: 3 }, { miles: 3 }, { miles: 3 }).complete).toBe(false)
+  })
+  it('counts toward times per period and ignores deleted entries', () => {
     const s = periodStatus(lift, [c(lift, {}), c(lift, {}), { ...c(lift, {}), deletedAt: Timestamp.now() }])
     expect(s).toMatchObject({ count: 2, total: 2, required: 3, complete: false })
   })
-  it('an out-of-range entry is logged but does not complete the day', () => {
-    expect(periodStatus(run, [c(run, { miles: 0.5 })])).toMatchObject({ count: 0, total: 1, complete: false })
-    expect(periodStatus(run, [c(run, { miles: 0.5 }, 1), c(run, { miles: 1.5 }, 2)])).toMatchObject({ count: 1, total: 2, complete: true })
+})
+
+describe('periodTotals and totalProgress', () => {
+  it('sums every entry and reads as progress', () => {
+    const [t] = periodTotals(squats, [{ squats: 40 }, { squats: null }])
+    expect(totalProgress(t!, squats.fields[0]!)).toBe('40 / 100')
+    const [m] = periodTotals(under, [{ kcal: 1850 }])
+    expect(totalProgress(m!, under.fields[0]!)).toBe('1850 kcal of 2200 kcal max')
   })
 })
 
 describe('quickValues', () => {
   it('fills every default when every required field has one', () => {
-    expect(quickValues(run)).toEqual({ miles: 1, time: null })
+    expect(quickValues(squats)).toEqual({ squats: 100 })
     expect(quickValues(under)).toEqual({ kcal: null })
     expect(quickValues(stretch)).toEqual({ notes: null })
   })
   it('needs the form when a required field has no default', () => {
     expect(quickValues(track)).toBeNull()
-    expect(quickValues(fast)).toBeNull()
+    expect(quickValues(fastMile)).toBeNull()
+    expect(missingRequiredFields(track, {})).toEqual(['kcal'])
   })
-  it('one-tap values count for every one-tap example', () => {
-    for (const s of [run, under, stretch]) expect(isCounting(s, quickValues(s)!)).toBe(true)
+  it('a one-tap entry qualifies', () => {
+    for (const s of [squats, sets, under, stretch]) expect(qualifies(s, quickValues(s)!)).toBe(true)
   })
 })
 

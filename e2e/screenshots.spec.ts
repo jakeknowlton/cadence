@@ -50,7 +50,7 @@ test('capture key screens', async ({ page }) => {
       await page.getByRole('button', { name: /add field/i }).click()
       await page.getByPlaceholder('Label (e.g. Distance)').fill('Distance')
       await page.getByPlaceholder('Unit (mi, kcal)').fill('mi')
-      await page.getByLabel('Min').fill('1')
+      await page.getByLabel('Each entry min').fill('1')
       await page.getByLabel('Default').fill('1')
       await page.getByLabel('Required').click()
     }

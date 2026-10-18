@@ -47,6 +47,10 @@ const CADENCES: { value: Cadence; label: string }[] = [
   { value: 'monthly', label: 'Every month' },
 ]
 const PERIOD_NOUN: Record<Cadence, string> = { daily: 'day', weekly: 'week', monthly: 'month' }
+const LIMITS = [
+  { min: 'min', max: 'max', aria: 'Each entry', label: () => 'Each entry' },
+  { min: 'totalMin', max: 'totalMax', aria: 'Total', label: (noun: string) => `Total per ${noun}` },
+] as const
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'number', label: 'Number' },
@@ -179,6 +183,8 @@ const normalized = computed<TaskDefinition>(() => ({
       unit: f.type === 'number' ? f.unit?.trim() || undefined : undefined,
       min: ranged ? numOrUndef(f.min) : undefined,
       max: ranged ? numOrUndef(f.max) : undefined,
+      totalMin: ranged ? numOrUndef(f.totalMin) : undefined,
+      totalMax: ranged ? numOrUndef(f.totalMax) : undefined,
       step: f.type === 'number' ? numOrUndef(f.step) : undefined,
       options: f.type === 'select' ? f.options : undefined,
       default: defaultFor(f),
@@ -282,7 +288,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
       <Label for="task-required">Times per {{ PERIOD_NOUN[def.cadence] }}</Label>
       <Input id="task-required" v-model.number="def.requiredCount" type="number" inputmode="numeric" min="1" step="1" class="max-w-32" />
       <p class="text-sm text-muted-foreground">
-        How many check-offs it takes before the {{ PERIOD_NOUN[def.cadence] }} counts as done. Usually 1.
+        How many qualifying entries the {{ PERIOD_NOUN[def.cadence] }} needs. Usually 1.
       </p>
     </div>
 
@@ -347,33 +353,42 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
           placeholder="Choices, comma separated"
           @input="syncOptions(f)"
         />
-        <div v-if="f.type === 'number'" class="grid grid-cols-3 gap-2">
-          <div class="grid gap-1">
-            <Label :for="`min-${i}`" class="text-xs text-muted-foreground">Min</Label>
-            <Input :id="`min-${i}`" v-model="f.min" type="number" inputmode="decimal" step="any" placeholder="None" />
+        <template v-if="f.type === 'number' || f.type === 'duration'">
+          <div v-for="limit in LIMITS" :key="limit.min" class="grid gap-1">
+            <p class="text-xs font-semibold text-muted-foreground">{{ limit.label(PERIOD_NOUN[def.cadence]) }}</p>
+            <div class="grid grid-cols-2 gap-2">
+              <template v-for="side in [limit.min, limit.max]" :key="side">
+                <Input
+                  v-if="f.type === 'number'"
+                  :id="`${side}-${i}`"
+                  :model-value="(f[side] as number | string | undefined)"
+                  :aria-label="`${limit.aria} ${side === limit.min ? 'min' : 'max'}`"
+                  type="number"
+                  inputmode="decimal"
+                  step="any"
+                  :placeholder="side === limit.min ? 'Min' : 'Max'"
+                  @update:model-value="f[side] = $event as number"
+                />
+                <DurationInput
+                  v-else
+                  :id="`${side}-${i}`"
+                  :model-value="f[side] ?? null"
+                  :aria-label="`${limit.aria} ${side === limit.min ? 'min' : 'max'}`"
+                  :placeholder="side === limit.min ? 'Min' : 'Max'"
+                  @update:model-value="f[side] = $event ?? undefined"
+                />
+              </template>
+            </div>
           </div>
-          <div class="grid gap-1">
-            <Label :for="`max-${i}`" class="text-xs text-muted-foreground">Max</Label>
-            <Input :id="`max-${i}`" v-model="f.max" type="number" inputmode="decimal" step="any" placeholder="None" />
-          </div>
-          <div class="grid gap-1">
-            <Label :for="`step-${i}`" class="text-xs text-muted-foreground">Round to</Label>
-            <Input :id="`step-${i}`" v-model="f.step" type="number" inputmode="decimal" step="any" min="0" placeholder="Exact" />
-          </div>
+          <p class="-mt-1 text-xs text-muted-foreground">
+            An entry outside the each-entry limits is saved but doesn’t qualify. The total adds up every entry in the {{ PERIOD_NOUN[def.cadence] }}.
+          </p>
+        </template>
+        <div v-if="f.type === 'number'" class="grid gap-1">
+          <Label :for="`step-${i}`" class="text-xs text-muted-foreground">Round to</Label>
+          <Input :id="`step-${i}`" v-model="f.step" type="number" inputmode="decimal" step="any" min="0" placeholder="Exact" class="max-w-40" />
+          <p class="text-xs text-muted-foreground">0.1 for one decimal place, 5 for the nearest 5.</p>
         </div>
-        <div v-else-if="f.type === 'duration'" class="grid grid-cols-2 gap-2">
-          <div class="grid gap-1">
-            <Label :for="`min-${i}`" class="text-xs text-muted-foreground">Min</Label>
-            <DurationInput :id="`min-${i}`" v-model="f.min" placeholder="None" />
-          </div>
-          <div class="grid gap-1">
-            <Label :for="`max-${i}`" class="text-xs text-muted-foreground">Max</Label>
-            <DurationInput :id="`max-${i}`" v-model="f.max" placeholder="None" />
-          </div>
-        </div>
-        <p v-if="f.type === 'number' || f.type === 'duration'" class="-mt-1 text-xs text-muted-foreground">
-          Entries outside min and max are saved but don’t count.<template v-if="f.type === 'number'"> Round to 0.1 for one decimal place, 5 for the nearest 5.</template>
-        </p>
         <div class="grid gap-1">
           <Label :for="`default-${i}`" class="text-xs text-muted-foreground">Default</Label>
           <Input v-if="f.type === 'number'" :id="`default-${i}`" :model-value="(f.default as number | string | undefined)" type="number" inputmode="decimal" step="any" placeholder="None" @update:model-value="f.default = $event" />
@@ -410,7 +425,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         <p class="text-base font-semibold">Charts</p>
         <p class="mt-1 text-sm text-muted-foreground">
           What everyone sees on the Stats page. Divide two fields for things like time per mile.
-          <template v-if="!def.charts?.length"> With none set, Stats shows only completions and completion rate.</template>
+          <template v-if="!def.charts?.length"> With none set, Stats shows only entries per week and completion rate.</template>
         </p>
       </div>
       <div v-for="(c, i) in def.charts ?? []" :key="i" class="grid gap-3 rounded-xl bg-muted/60 p-3">

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { PhTrash } from '@phosphor-icons/vue'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
-import { formatValue, missingRequiredFields, outOfRangeFields, roundToStep } from '@/lib/completionStatus'
+import { entryMisses, formatValue, missingRequiredFields, periodTotals, roundToStep, totalProgress } from '@/lib/completionStatus'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,16 +57,28 @@ const normalized = computed<CompletionValues>(() => {
   }
   return out
 })
-// Required fields must be filled before saving; out-of-range values are saved but flagged as not counting.
+// Required fields must be filled before saving; an entry that misses a per-entry limit is saved but doesn't qualify.
 const errors = computed(() =>
   props.version ? missingRequiredFields(props.version.snapshot, normalized.value).map((k) => `${labelOf(k)} is required`) : [],
 )
-const outOfRange = computed(() =>
-  (props.version ? outOfRangeFields(props.version.snapshot, normalized.value) : []).map((o) => {
-    const f = fieldOf(o.key)
-    return `${f?.label || o.key} is ${o.side === 'min' ? 'below the min' : 'above the max'} of ${formatValue(o.limit, f?.type ?? 'number', f?.unit)}`
+const misses = computed(() =>
+  (props.version ? entryMisses(props.version.snapshot, normalized.value) : []).map((m) => {
+    const f = fieldOf(m.key)
+    const label = f?.label || m.key
+    const limit = `${m.side === 'min' ? 'at least' : 'at most'} ${formatValue(m.limit, f?.type ?? 'number', f?.unit)}`
+    return m.blank ? `${label} is empty; each entry needs ${limit}` : `${label} needs to be ${limit} per entry`
   }),
 )
+const PERIOD_WORD = { daily: 'today', weekly: 'this week', monthly: 'this month' } as const
+/** Period totals including this entry (and without the one being edited), so the member sees progress before saving. */
+const totalsAfter = computed(() => {
+  if (!props.version) return []
+  const others = props.existing.filter((c) => c.id !== editing.value?.id).map((c) => c.values)
+  return periodTotals(props.version.snapshot, [...others, normalized.value]).map((t) => {
+    const f = fieldOf(t.key)!
+    return { key: t.key, ok: t.ok, text: `${f.label} ${PERIOD_WORD[props.version!.cadence]}: ${totalProgress(t, f)}` }
+  })
+})
 const fieldOf = (key: string) => props.version?.fields.find((f) => f.key === key)
 const labelOf = (key: string) => fieldOf(key)?.label ?? key
 
@@ -145,10 +157,13 @@ function submit() {
           <Label for="f-note">Note</Label>
           <Input id="f-note" v-model="note" placeholder="Optional" maxlength="200" />
         </div>
-        <div v-if="outOfRange.length" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-          <p v-for="m in outOfRange" :key="m">{{ m }}</p>
-          <p class="font-semibold">This will be saved but won’t count.</p>
+        <div v-if="misses.length" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+          <p v-for="m in misses" :key="m">{{ m }}</p>
+          <p class="font-semibold">This entry will be saved but won’t qualify.</p>
         </div>
+        <p v-for="t in totalsAfter" :key="t.key" class="tabular text-sm" :class="t.ok ? 'font-semibold text-primary' : 'text-muted-foreground'">
+          {{ t.text }}
+        </p>
         <ul v-if="errors.length" class="list-disc pl-4 text-sm text-destructive">
           <li v-for="e in errors" :key="e">{{ e }}</li>
         </ul>

@@ -23,9 +23,10 @@ watch(() => props.tasks.map((t) => t.id).join(), () => (selected.value = Math.mi
 function cell(task: TaskVersionDoc, uid: string) {
   const cs = props.completions.filter((c) => c.taskId === task.taskId && c.userId === uid && c.periodKey === props.period.key && !c.deletedAt)
   const status = periodStatus(task.snapshot, cs)
+  // Every entry is a data point, so show the period's total of the first number or duration field.
   const field = task.fields.find((f) => f.type === 'number' || f.type === 'duration')
-  const latest = cs.at(-1)
-  const value = field && latest ? formatValue(latest.values[field.key], field.type, field.unit) : ''
+  const sums = field ? cs.map((c) => c.values[field.key]).filter((v): v is number => typeof v === 'number') : []
+  const value = field && sums.length ? formatValue(sums.reduce((a, b) => a + b, 0), field.type, field.unit) : ''
   return { status, value }
 }
 const selectedTask = computed(() => props.tasks[selected.value] ?? null)

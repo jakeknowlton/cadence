@@ -11,9 +11,12 @@ export interface TaskField {
   type: FieldType
   unit?: string
   required: boolean
-  /** number and duration: a value outside min/max is saved but the completion doesn't count */
+  /** number and duration, per entry: an entry qualifies only if its value is within them */
   min?: number
   max?: number
+  /** number and duration, per period: the sum over the period's entries must be within them */
+  totalMin?: number
+  totalMax?: number
   /** number: entries are rounded to the nearest multiple when saved */
   step?: number
   options?: string[]

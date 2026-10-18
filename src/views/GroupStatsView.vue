@@ -145,7 +145,7 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
             <TrendChart class="mt-3" :series="c.series" kind="line" :markers="markers" :format="(v) => formatChartValue(v, c.format)" />
           </div>
           <div class="panel p-4">
-            <h2 class="text-base">Completions per week</h2>
+            <h2 class="text-base">Entries per week</h2>
             <TrendChart class="mt-3" :series="countChart" kind="bar" :markers="markers" />
           </div>
           <div class="panel p-4">

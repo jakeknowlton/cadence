@@ -1,7 +1,7 @@
 import type { Cadence, Weekday } from '@/types/task'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion } from '@/types/completion'
-import { isCounting } from './completionStatus'
+import { periodStatus } from './completionStatus'
 import { isActiveDay, periodFor, periodsInRange, type DateString, type Period } from './periods'
 import { versionInEffect } from './versions'
 
@@ -91,10 +91,12 @@ export function periodResults(seg: Segment, input: StatsInput): PeriodResult[] {
       period.end < input.joinedOn ||
       (input.leftOn !== null && period.start > input.leftOn)
     const required = version?.requiredCount ?? 1
-    const count = (byKey.get(period.key) ?? []).filter((c) => isCounting(c.taskSnapshot, c.values)).length
+    // Judged by the settings in effect for this period, not each entry's own snapshot.
+    const status = version ? periodStatus(version.snapshot, byKey.get(period.key) ?? []) : null
+    const count = status?.count ?? 0
     let outcome: PeriodOutcome
     if (inactive) outcome = 'inactive'
-    else if (count >= required) outcome = 'complete'
+    else if (status?.complete) outcome = 'complete'
     else if (period.end >= input.today) outcome = 'pending'
     else outcome = 'missed'
     return { period, outcome, count, required }
@@ -193,7 +195,7 @@ export function bucketsInRange(from: DateString, to: DateString, bucket: Bucket,
   return periodsInRange(from, to, bucket === 'week' ? 'weekly' : 'monthly', weekStartsOn).map((p) => p.start)
 }
 
-/** Sum or average of a numeric field per bucket, or the count of counting completions. */
+/** Sum or average of a numeric field per bucket, or the number of entries. */
 export function valueSeries(
   completions: Completion[],
   opts: { from: DateString; to: DateString; bucket: Bucket; weekStartsOn: Weekday; fieldKey?: string; agg: 'sum' | 'avg' | 'count' },
@@ -205,7 +207,6 @@ export function valueSeries(
     if (day < opts.from || day > opts.to) continue
     const key = bucketKey(day, opts.bucket, opts.weekStartsOn)
     if (opts.agg === 'count') {
-      if (!isCounting(c.taskSnapshot, c.values)) continue
       acc.set(key, [...(acc.get(key) ?? []), 1])
     } else {
       const v = c.values[opts.fieldKey ?? '']

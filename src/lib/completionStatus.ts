@@ -9,29 +9,52 @@ export function missingRequiredFields(snapshot: TaskSnapshot, values: Completion
   return snapshot.fields.filter((f) => f.required && !hasValue(values[f.key])).map((f) => f.key)
 }
 
-export interface OutOfRange {
+const isMeasure = (type: string) => type === 'number' || type === 'duration'
+
+export interface EntryMiss {
   key: string
-  /** which limit the value crossed */
+  /** which per-entry limit the value missed */
   side: 'min' | 'max'
   limit: number
+  /** the field was left blank, so it can't meet the limit */
+  blank: boolean
 }
 
-/** Entered number and duration values outside their field's min or max. Blank values are never out of range. */
-export function outOfRangeFields(snapshot: TaskSnapshot, values: CompletionValues): OutOfRange[] {
-  const out: OutOfRange[] = []
+/** Per-entry limits this entry misses. A blank value misses any limit on its field. */
+export function entryMisses(snapshot: TaskSnapshot, values: CompletionValues): EntryMiss[] {
+  const out: EntryMiss[] = []
   for (const f of snapshot.fields) {
-    if (f.type !== 'number' && f.type !== 'duration') continue
+    if (!isMeasure(f.type) || (f.min === undefined && f.max === undefined)) continue
     const v = values[f.key]
-    if (typeof v !== 'number' || Number.isNaN(v)) continue
-    if (f.min !== undefined && v < f.min) out.push({ key: f.key, side: 'min', limit: f.min })
-    else if (f.max !== undefined && v > f.max) out.push({ key: f.key, side: 'max', limit: f.max })
+    const blank = typeof v !== 'number' || Number.isNaN(v)
+    if (f.min !== undefined && (blank || v < f.min)) out.push({ key: f.key, side: 'min', limit: f.min, blank })
+    else if (f.max !== undefined && (blank || v > f.max)) out.push({ key: f.key, side: 'max', limit: f.max, blank })
   }
   return out
 }
 
-/** A completion counts when every required field has a value and every entered value is within its min and max. */
-export function isCounting(snapshot: TaskSnapshot, values: CompletionValues): boolean {
-  return missingRequiredFields(snapshot, values).length === 0 && outOfRangeFields(snapshot, values).length === 0
+/** An entry qualifies when it meets every per-entry limit on the task at once. */
+export function qualifies(snapshot: TaskSnapshot, values: CompletionValues): boolean {
+  return entryMisses(snapshot, values).length === 0
+}
+
+export interface PeriodTotal {
+  key: string
+  sum: number
+  min?: number
+  max?: number
+  ok: boolean
+}
+
+/** Sums of every field with a period total limit, over all the period's entries, qualifying or not. */
+export function periodTotals(snapshot: TaskSnapshot, entries: CompletionValues[]): PeriodTotal[] {
+  return snapshot.fields
+    .filter((f) => isMeasure(f.type) && (f.totalMin !== undefined || f.totalMax !== undefined))
+    .map((f) => {
+      const sum = entries.reduce((t, v) => t + (typeof v[f.key] === 'number' ? (v[f.key] as number) : 0), 0)
+      const ok = (f.totalMin === undefined || sum >= f.totalMin) && (f.totalMax === undefined || sum <= f.totalMax)
+      return { key: f.key, sum, min: f.totalMin, max: f.totalMax, ok }
+    })
 }
 
 /** Values for a one-tap log: every field's default, or null if a required field has no default. */
@@ -41,23 +64,35 @@ export function quickValues(snapshot: TaskSnapshot): CompletionValues | null {
 }
 
 export interface PeriodStatus {
-  /** counting completions */
+  /** qualifying entries */
   count: number
-  /** all non-deleted completions */
+  /** all non-deleted entries */
   total: number
   required: number
+  totals: PeriodTotal[]
+  /** enough qualifying entries, and every period total within its limits */
   complete: boolean
 }
 
+/** Judges a period's entries by the task settings in effect for that period. */
 export function periodStatus(snapshot: TaskSnapshot, completions: Completion[]): PeriodStatus {
   const live = completions.filter((c) => !c.deletedAt)
-  const counting = live.filter((c) => isCounting(c.taskSnapshot, c.values))
+  const count = live.filter((c) => qualifies(snapshot, c.values)).length
+  const totals = periodTotals(snapshot, live.map((c) => c.values))
   return {
-    count: counting.length,
+    count,
     total: live.length,
     required: snapshot.requiredCount,
-    complete: counting.length >= snapshot.requiredCount,
+    totals,
+    complete: count >= snapshot.requiredCount && totals.every((t) => t.ok),
   }
+}
+
+/** Progress toward a period total, such as "60 / 100 reps" or "1850 of 2200 kcal max". */
+export function totalProgress(t: PeriodTotal, field: { type: string; unit?: string }): string {
+  const fmt = (n: number) => formatValue(n, field.type, field.unit)
+  if (t.min !== undefined) return `${fmt(t.sum)} / ${fmt(t.min)}`
+  return `${fmt(t.sum)} of ${fmt(t.max!)} max`
 }
 
 /** Rounds to the nearest multiple of `step`, keeping only the decimals the step has (so 0.1 steps never give 0.30000000000000004). */

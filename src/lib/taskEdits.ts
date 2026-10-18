@@ -15,7 +15,7 @@ export function fieldSignature(f: Pick<TaskField, 'type' | 'unit'>): string {
 }
 
 const COSMETIC_KEYS = ['name', 'description', 'icon', 'sortOrder'] as const
-const MEASURED_FIELD_KEYS = ['required', 'min', 'max', 'step', 'options'] as const
+const MEASURED_FIELD_KEYS = ['required', 'min', 'max', 'totalMin', 'totalMax', 'step', 'options'] as const
 
 function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
@@ -108,6 +108,8 @@ export function validateDefinition(def: TaskDefinition): string[] {
       errors.push(`Field "${f.key}" needs options`)
     if (f.min !== undefined && f.max !== undefined && f.min > f.max)
       errors.push(`Field "${f.key}" min is greater than max`)
+    if (f.totalMin !== undefined && f.totalMax !== undefined && f.totalMin > f.totalMax)
+      errors.push(`Field "${f.key}" total min is greater than total max`)
     if (f.step !== undefined && !(f.step > 0)) errors.push(`Field "${f.key}" must round to a number above 0`)
     errors.push(...defaultErrors(f))
   }

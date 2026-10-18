@@ -81,6 +81,14 @@ describe('computeStats', () => {
     expect(segments[1]!.currentStreak).toBe(1)
   })
 
+  it('judges each period by the version in effect, adding entries toward a total', () => {
+    const totalDef: TaskDefinition = { ...runDef, fields: [{ ...runDef.fields[0]!, totalMin: 2 }] }
+    const run = v('v1', totalDef, '2026-01-01', null)
+    const entries = [done(run, '2026-10-13', 1), done(run, '2026-10-13', 1), done(run, '2026-10-14', 1.5)]
+    const { segments } = computeStats({ ...base, from: '2026-10-13', versions: [run], completions: entries })
+    expect(segments[0]!.periods.map((p) => p.outcome)).toEqual(['complete', 'missed', 'pending'])
+  })
+
   it('aggregates numeric fields across all completions in range', () => {
     const run = v('v1', runDef, '2026-01-01', null)
     const { fields } = computeStats({ ...base, versions: [run], completions: [done(run, '2026-10-10', 1), done(run, '2026-10-11', 3), done(run, '2026-09-01', 100)] })

@@ -115,7 +115,8 @@ interface TaskField {
   type: 'number' | 'duration' | 'text' | 'boolean' | 'select'
   unit?: string
   required: boolean
-  min?: number; max?: number        // number and duration: a completion counts only within them; never refused
+  min?: number; max?: number        // number and duration, per entry: an entry qualifies only within them
+  totalMin?: number; totalMax?: number // number and duration, per period: the sum over the period's entries
   step?: number                     // number: rounding applied on save
   options?: string[]
   default?: unknown                 // set by the admin, never inferred; one tap logs defaults
@@ -196,7 +197,7 @@ Pinia stores wrap VueFire bindings: auth and profile; my groups and, for admins,
 
 Archived groups and tasks are hidden in the app, not by the rules: `useGroup` drops archived tasks unless an admin screen asks for them, member group pages show an empty state for an archived group, and the groups store's `isHidden` filters personal history and the inbox. Hard deletes run from the admin's browser in batches of at most 400 writes. They are not atomic, so the parent document is deleted last and a failed delete can simply be run again.
 
-Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, out-of-range fields, one-tap defaults); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
+Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; period status (qualifying entries, period totals, complete, one-tap defaults); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
 
 ### Components
 

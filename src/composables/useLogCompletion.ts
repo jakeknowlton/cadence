@@ -5,7 +5,7 @@ import type { Group, Membership, TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
 import type { Period } from '@/lib/periods'
 import { inboxItemId, recipientsFor } from '@/lib/notifications'
-import { isCounting } from '@/lib/completionStatus'
+import { periodStatus } from '@/lib/completionStatus'
 
 const FANOUT_CHUNK = 8 // each inbox write costs two rule reads; stay well under the per-batch limit
 
@@ -16,7 +16,14 @@ export function useLogCompletion() {
     group: Group,
     version: TaskVersionDoc,
     period: Period,
-    opts: { values?: CompletionValues; note?: string | null; completedAt?: Date; members: Membership[] },
+    opts: {
+      values?: CompletionValues
+      note?: string | null
+      completedAt?: Date
+      members: Membership[]
+      /** this member's existing entries for the period, to tell whether this one completes it */
+      periodEntries: Completion[]
+    },
   ): Promise<string> {
     const uid = authStore.uid!
     const ref = doc(collection(db, 'groups', group.id, 'completions'))
@@ -42,8 +49,11 @@ export function useLogCompletion() {
     }
     await batch.commit()
 
-    // Only a completion that counts is news; an out-of-range or incomplete entry tells nobody.
-    if (!isCounting(version.snapshot, opts.values ?? {})) return ref.id
+    // Only completing the period is news: 40 squats tells nobody, the 60 that reaches 100 does.
+    const asEntry = (values: CompletionValues) => ({ values, deletedAt: null }) as Completion
+    const before = periodStatus(version.snapshot, opts.periodEntries).complete
+    const after = periodStatus(version.snapshot, [...opts.periodEntries, asEntry(opts.values ?? {})]).complete
+    if (before || !after) return ref.id
 
     // Best-effort inbox fan-out; a failure here must not undo the completion.
     try {

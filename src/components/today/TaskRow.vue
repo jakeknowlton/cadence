@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { PhCheck, PhPlus } from '@phosphor-icons/vue'
 import type { TaskVersionDoc } from '@/types/group'
-import { quickValues, type PeriodStatus } from '@/lib/completionStatus'
+import { quickValues, totalProgress, type PeriodStatus } from '@/lib/completionStatus'
 import { iconFor } from '@/lib/icons'
 
 const props = defineProps<{ version: TaskVersionDoc; status: PeriodStatus; editable: boolean; busy?: boolean }>()
@@ -15,7 +15,10 @@ const meta = computed(() => {
   const parts: string[] = []
   if (props.version.cadence !== 'daily') parts.push(props.version.cadence === 'weekly' ? 'this week' : 'this month')
   if (multi.value) parts.push(`${props.status.count} of ${props.status.required}`)
-  if (props.status.total > 0 && !props.status.complete && props.status.count < props.status.total) parts.push('logged, not counting')
+  for (const t of props.status.totals) {
+    const f = props.version.fields.find((x) => x.key === t.key)
+    if (f) parts.push(totalProgress(t, f))
+  }
   return parts.join(', ')
 })
 </script>

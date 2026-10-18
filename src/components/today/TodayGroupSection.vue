@@ -81,7 +81,7 @@ async function toggle(v: TaskVersionDoc) {
     } else if (status.complete) {
       openSheet(v)
     } else {
-      await log(group.value, v, periodOf(v), { values: values ?? {}, members: members.value, completedAt: completedAtFor() })
+      await log(group.value, v, periodOf(v), { values: values ?? {}, members: members.value, completedAt: completedAtFor(), periodEntries: completionsFor(v) })
     }
   } finally {
     busy.value = null
@@ -102,7 +102,7 @@ async function onSave(values: CompletionValues, note: string | null, editing: Co
   busy.value = v.taskId
   try {
     if (editing) await update(group.value.id, editing, { values, note })
-    else await log(group.value, v, periodOf(v), { values, note, members: members.value, completedAt: completedAtFor() })
+    else await log(group.value, v, periodOf(v), { values, note, members: members.value, completedAt: completedAtFor(), periodEntries: completionsFor(v) })
     sheetOpen.value = false
   } finally {
     busy.value = null

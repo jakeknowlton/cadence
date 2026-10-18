@@ -410,7 +410,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         <p class="text-base font-semibold">Charts</p>
         <p class="mt-1 text-sm text-muted-foreground">
           What everyone sees on the Stats page. Divide two fields for things like time per mile.
-          <template v-if="!def.charts?.length"> With none set, Stats shows a total for each number and duration field.</template>
+          <template v-if="!def.charts?.length"> With none set, Stats shows only completions and completion rate.</template>
         </p>
       </div>
       <div v-for="(c, i) in def.charts ?? []" :key="i" class="grid gap-3 rounded-xl bg-muted/60 p-3">

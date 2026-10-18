@@ -188,10 +188,10 @@ Stats are per member per task over a date range the viewer chooses, defaulting t
 
 ### Charts
 
-Charts are the primary way members see progress over time. Each chart shows one member or all members overlaid, bucketed by week or by month regardless of the task's cadence, with a marker wherever the task version changed.
+Charts are the primary way members see progress over time. Each chart shows one member or all members overlaid, regardless of the task's cadence, with a marker wherever the task version changed. Task charts are bucketed by week, or by month for ranges over four months.
 
 - The task's own charts, below.
-- Completions over time: counting completions per bucket.
+- Completions per week: counting completions, always weekly so months of different lengths don't distort the counts.
 - Completion rate over time: per month, per cadence segment.
 
 #### Task charts
@@ -206,7 +206,7 @@ An admin defines each task's charts in the task editor, and every member sees th
 
 How values read follows from the field types: a duration divided by a number is time per unit ("9:12 /mi"), a number divided by a duration is per hour ("6.5 mi/h"), and anything else is a plain number or duration. The average of a divided value is total over total, so a five-mile run weighs more than a quarter mile; min and max use each entry's own value. Entries missing a field a chart needs are left out of that chart, and every logged entry is included whether it counted or not. Each member's stats card shows every chart's value over the date range with the number of entries it covers.
 
-A task with no charts set shows a Total chart for each number and duration field. Charts are display only: they are never stored on completions and never affect whether a completion counts.
+A task with no charts set shows none; Stats then shows only completions and completion rate. Charts are display only: they are never stored on completions and never affect whether a completion counts.
 
 Stats and charts are computed in the app from the completions of one task at a time, which at a group's scale is a few thousand records at most.
 

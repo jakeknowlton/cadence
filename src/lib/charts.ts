@@ -6,14 +6,6 @@ import type { DateString } from './periods'
 
 export const AGG_LABELS: Record<TaskChart['agg'], string> = { sum: 'Total', avg: 'Average', min: 'Min', max: 'Max' }
 
-const isMeasure = (f: TaskField) => f.type === 'number' || f.type === 'duration'
-
-/** The task's charts, or one Total chart per number and duration field when none are set. */
-export function chartsFor(fields: TaskField[], charts: TaskChart[] | undefined): TaskChart[] {
-  if (charts?.length) return charts
-  return fields.filter(isMeasure).map((f) => ({ name: f.label, a: f.key, agg: 'sum' }))
-}
-
 /**
  * How a chart's numbers read, worked out from field types alone: a duration over a number is time
  * per unit, a number over a duration is per hour, and anything else is a plain number.

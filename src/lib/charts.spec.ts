@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Timestamp } from 'firebase/firestore'
 import type { TaskChart, TaskField } from '@/types/task'
 import type { Completion, CompletionValues } from '@/types/completion'
-import { aggregate, chartFormat, chartSeries, chartsFor, chartSummary, entryValue, formatChartValue } from './charts'
+import { aggregate, chartFormat, chartSeries, chartSummary, entryValue, formatChartValue } from './charts'
 
 const fields: TaskField[] = [
   { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true },
@@ -20,13 +20,6 @@ function c(day: string, values: CompletionValues, deleted = false): Completion {
     completedAt: Timestamp.now(), loggedAt: Timestamp.now(), values, note: null, taskSnapshot: { cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields', fields },
     deletedAt: deleted ? Timestamp.now() : null }
 }
-
-describe('chartsFor', () => {
-  it('uses the admin charts, or a Total per number and duration field', () => {
-    expect(chartsFor(fields, [pace])).toEqual([pace])
-    expect(chartsFor(fields, []).map((x) => `${x.name}:${x.agg}`)).toEqual(['Distance:sum', 'Time:sum', 'Sets:sum', 'Reps:sum'])
-  })
-})
 
 describe('entryValue', () => {
   it('needs every field it uses, and never divides by zero', () => {

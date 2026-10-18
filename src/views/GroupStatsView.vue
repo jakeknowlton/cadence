@@ -8,7 +8,7 @@ import { useGroup, useProfiles } from '@/composables/useGroup'
 import type { Completion } from '@/types/completion'
 import { localDate, shiftDays } from '@/lib/periods'
 import { computeStats, rateSeries, valueSeries, type Bucket } from '@/lib/stats'
-import { AGG_LABELS, chartFormat, chartSeries, chartsFor, chartSummary, formatChartValue } from '@/lib/charts'
+import { AGG_LABELS, chartFormat, chartSeries, chartSummary, formatChartValue } from '@/lib/charts'
 import GroupHeader from '@/components/groups/GroupHeader.vue'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import TrendChart from '@/components/groups/TrendChart.vue'
@@ -61,11 +61,11 @@ const perMember = computed(() =>
 )
 
 const seriesOpts = computed(() => ({ from: from.value, to: today.value, bucket: bucket.value, weekStartsOn: group.value?.weekStartsOn ?? 1 }))
-/** The admin's charts for this task (or a Total per number and duration field), each with its formatting and per-member data. */
+/** The admin's charts for this task, each with its formatting and per-member data. None set means none shown. */
 const charts = computed(() => {
   if (!task.value) return []
   const fields = task.value.fields
-  return chartsFor(fields, task.value.charts).map((chart) => {
+  return (task.value.charts ?? []).map((chart) => {
     const format = chartFormat(chart, fields)
     return {
       chart,
@@ -75,7 +75,8 @@ const charts = computed(() => {
     }
   })
 })
-const countChart = computed(() => perMember.value.map((p) => ({ label: p.name, points: valueSeries(p.completions, { ...seriesOpts.value, agg: 'count' }) })))
+// Always weekly: monthly counts would vary with the length of the month.
+const countChart = computed(() => perMember.value.map((p) => ({ label: p.name, points: valueSeries(p.completions, { ...seriesOpts.value, bucket: 'week', agg: 'count' }) })))
 const rateChart = computed(() => perMember.value.map((p) => ({ label: p.name, points: rateSeries(p.stats.segments, from.value, today.value) })))
 const markers = computed(() => lineage.value.filter((v) => v.version > 1).map((v) => v.effectiveFrom))
 
@@ -144,7 +145,7 @@ const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%
             <TrendChart class="mt-3" :series="c.series" kind="line" :markers="markers" :format="(v) => formatChartValue(v, c.format)" />
           </div>
           <div class="panel p-4">
-            <h2 class="text-base">Completions per {{ bucket }}</h2>
+            <h2 class="text-base">Completions per week</h2>
             <TrendChart class="mt-3" :series="countChart" kind="bar" :markers="markers" />
           </div>
           <div class="panel p-4">

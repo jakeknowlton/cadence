@@ -9,8 +9,6 @@
 
 @theme inline {
     --font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
-    --color-goal: var(--goal);
-    --color-goal-foreground: var(--goal-foreground);
     --color-surface: var(--surface);
     --color-missed: var(--missed);
     --font-heading: var(--font-sans);
@@ -70,8 +68,6 @@
     --accent-foreground: oklch(0.22 0.012 160);
     --destructive: oklch(0.52 0.16 28);            /* clay #B4443A */
     --missed: oklch(0.52 0.16 28);
-    --goal: oklch(0.62 0.13 75);                   /* ochre #B8791B */
-    --goal-foreground: oklch(0.985 0.005 90);
     --border: oklch(0.88 0.008 155);
     --input: oklch(0.86 0.008 155);
     --ring: oklch(0.55 0.08 165);
@@ -110,8 +106,6 @@
     --accent-foreground: oklch(0.93 0.008 155);
     --destructive: oklch(0.68 0.14 28);
     --missed: oklch(0.68 0.14 28);
-    --goal: oklch(0.78 0.13 80);                   /* ochre, lifted #E0AE4C */
-    --goal-foreground: oklch(0.2 0.02 80);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 14%);
     --ring: oklch(0.6 0.08 160);

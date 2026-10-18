@@ -62,7 +62,7 @@ test('capture key screens', async ({ page }) => {
 
   await page.goto('/')
   await page.getByRole('listitem').filter({ hasText: 'Drink 100 oz water' }).getByRole('button', { name: 'Mark done' }).click()
-  await page.getByRole('listitem').filter({ hasText: 'Run a mile' }).getByRole('button', { name: 'Log', exact: true }).click()
+  await page.getByRole('listitem').filter({ hasText: 'Run a mile' }).getByRole('button', { name: /Run a mile/ }).click()
   await page.getByLabel(/Distance/).fill('1.4')
   await shot(page, '04-sheet')
   await page.getByRole('button', { name: 'Log it' }).click()

@@ -27,11 +27,17 @@ export function targetMet(snapshot: TaskSnapshot, values: CompletionValues): boo
   }
 }
 
-/** A completion counts when required fields are present and, if the target gates, the target is met. */
+/** A completion counts when required fields are present and the goal, if any, is met. */
 export function isCounting(snapshot: TaskSnapshot, values: CompletionValues): boolean {
   if (missingRequiredFields(snapshot, values).length > 0) return false
-  if (snapshot.target?.gatesCompletion) return targetMet(snapshot, values) === true
-  return true
+  return targetMet(snapshot, values) !== false
+}
+
+/** Values for a one-tap log: every field's default, or null if there is nothing to default or a required field has none. */
+export function quickValues(snapshot: TaskSnapshot): CompletionValues | null {
+  if (!snapshot.fields.some((f) => present(f.default))) return null
+  if (snapshot.fields.some((f) => f.required && !present(f.default))) return null
+  return Object.fromEntries(snapshot.fields.map((f) => [f.key, (f.default as CompletionValues[string]) ?? null]))
 }
 
 export interface PeriodStatus {
@@ -41,23 +47,16 @@ export interface PeriodStatus {
   total: number
   required: number
   complete: boolean
-  /** badge: the latest completion's target result */
-  goalMet: boolean | null
 }
 
 export function periodStatus(snapshot: TaskSnapshot, completions: Completion[]): PeriodStatus {
   const live = completions.filter((c) => !c.deletedAt)
   const counting = live.filter((c) => isCounting(c.taskSnapshot, c.values))
-  const latest = live.reduce<Completion | null>(
-    (best, c) => (!best || c.completedAt.toMillis() > best.completedAt.toMillis() ? c : best),
-    null,
-  )
   return {
     count: counting.length,
     total: live.length,
     required: snapshot.requiredCount,
     complete: counting.length >= snapshot.requiredCount,
-    goalMet: latest ? targetMet(latest.taskSnapshot, latest.values) : null,
   }
 }
 

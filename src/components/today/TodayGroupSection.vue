@@ -9,7 +9,7 @@ import { useLogCompletion } from '@/composables/useLogCompletion'
 import type { TaskVersionDoc } from '@/types/group'
 import type { Completion, CompletionValues } from '@/types/completion'
 import { currentPeriodKeys, isActiveDay, isWithinEditWindow, periodFor, type DateString } from '@/lib/periods'
-import { periodStatus } from '@/lib/completionStatus'
+import { periodStatus, quickValues } from '@/lib/completionStatus'
 import { versionsInEffect } from '@/lib/versions'
 import { iconFor } from '@/lib/icons'
 import { groupBar } from '@/lib/groupColor'
@@ -67,7 +67,9 @@ const sheetTask = ref<TaskVersionDoc | null>(null)
 async function toggle(v: TaskVersionDoc) {
   if (!group.value) return
   const status = statusOf(v)
-  if (v.completionType === 'fields' && !status.complete) {
+  // A field task logs in one tap when its fields have defaults (the goal amount); otherwise it needs the sheet.
+  const values = v.completionType === 'fields' ? quickValues(v.snapshot) : {}
+  if (!values && !status.complete) {
     openSheet(v)
     return
   }
@@ -79,7 +81,7 @@ async function toggle(v: TaskVersionDoc) {
     } else if (status.complete) {
       openSheet(v)
     } else {
-      await log(group.value, v, periodOf(v), { members: members.value, completedAt: completedAtFor() })
+      await log(group.value, v, periodOf(v), { values: values ?? {}, members: members.value, completedAt: completedAtFor() })
     }
   } finally {
     busy.value = null

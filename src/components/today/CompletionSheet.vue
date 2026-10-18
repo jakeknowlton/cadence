@@ -156,9 +156,7 @@ function submit() {
           <Label for="f-note">Note</Label>
           <Input id="f-note" v-model="note" placeholder="Optional" maxlength="200" />
         </div>
-        <p v-if="goal !== null" class="rounded-lg px-3 py-2 text-sm" :class="goal ? 'bg-goal/15 font-semibold text-goal' : 'bg-muted text-muted-foreground'">
-          {{ goal ? 'Goal met' : version.snapshot.target?.gatesCompletion ? 'Goal not met: this won’t count yet' : 'Goal not met' }}
-        </p>
+        <p v-if="goal === false" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Goal not met: this won’t count</p>
         <ul v-if="errors.length" class="list-disc pl-4 text-sm text-destructive">
           <li v-for="e in errors" :key="e">{{ e }}</li>
         </ul>

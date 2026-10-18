@@ -50,7 +50,7 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.getByRole('button', { name: 'Create task' }).click()
   await expect(page.getByText('Drink water')).toBeVisible()
 
-  // --- add a field task with a gating goal ---
+  // --- add a field task with a goal ---
   await page.getByRole('button', { name: /new task/i }).click()
   await page.getByLabel('Name').fill('Log calories')
   await page.getByLabel('Log details').click()
@@ -61,9 +61,20 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await page.getByLabel('Goal', { exact: true }).click()
   await page.locator('select').nth(3).selectOption('<=')
   await page.getByPlaceholder('Value').fill('2200')
-  await page.getByLabel('Goal required to count').click()
   await page.getByRole('button', { name: 'Create task' }).click()
   await expect(page.getByText('Log calories')).toBeVisible()
+
+  // --- an "at least" goal logs its amount in one tap ---
+  await page.getByRole('button', { name: /new task/i }).click()
+  await page.getByLabel('Name').fill('Run a mile')
+  await page.getByLabel('Log details').click()
+  await page.getByRole('button', { name: /add field/i }).click()
+  await page.getByPlaceholder('Label (e.g. Distance)').fill('Distance')
+  await page.getByPlaceholder('Unit (mi, kcal)').fill('mi')
+  await page.getByLabel('Goal', { exact: true }).click()
+  await expect(page.getByText(/tapping the check logs 1 mi/i)).toBeVisible()
+  await page.getByRole('button', { name: 'Create task' }).click()
+  await expect(page.getByText('Run a mile')).toBeVisible()
 
   // --- log both on Today ---
   await page.goto('/')
@@ -74,13 +85,17 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   const calories = page.getByRole('listitem').filter({ hasText: 'Log calories' })
   await calories.getByRole('button', { name: 'Log', exact: true }).click()
   await page.getByLabel(/Calories/).fill('2500')
-  await expect(page.getByText(/goal not met: this won’t count yet/i)).toBeVisible()
+  await expect(page.getByText(/goal not met: this won’t count/i)).toBeVisible()
   await page.getByRole('button', { name: 'Log it' }).click()
   await expect(calories.getByText(/logged, goal not met/i)).toBeVisible()
   await calories.getByRole('button', { name: 'Log', exact: true }).click()
   await page.getByLabel(/Calories/).fill('2000')
   await page.getByRole('button', { name: 'Log another' }).click()
   await expect(calories.getByRole('button', { name: 'Mark not done' })).toBeVisible()
+
+  const run = page.getByRole('listitem').filter({ hasText: 'Run a mile' })
+  await run.getByRole('button', { name: 'Mark done' }).click()
+  await expect(run.getByRole('button', { name: 'Mark not done' })).toBeVisible()
 
   // --- group page shows the grid and feed ---
   await page.getByRole('link', { name: 'Test Crew' }).first().click()

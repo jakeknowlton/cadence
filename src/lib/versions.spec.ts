@@ -6,8 +6,8 @@ import { effectiveFromForChange, lineageFieldTypes, newTaskVersion, nextTaskVers
 
 const def: TaskDefinition = {
   name: 'Run', sortOrder: 1, cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields',
-  fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false, min: 0 }],
-  target: { fieldKey: 'miles', comparator: '>=', value: 1, gatesCompletion: false },
+  fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, default: 1 }],
+  target: { fieldKey: 'miles', comparator: '>=', value: 1 },
 }
 
 function asDoc(w: ReturnType<typeof newTaskVersion>, id: string): TaskVersionDoc {
@@ -23,8 +23,8 @@ describe('newTaskVersion', () => {
     expect(v.fieldTypes).toEqual({ miles: 'number|mi' })
     expect(v.snapshot).toEqual({
       cadence: 'daily', activeDays: null, requiredCount: 1, completionType: 'fields',
-      fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false, min: 0 }],
-      target: { fieldKey: 'miles', comparator: '>=', value: 1, gatesCompletion: false },
+      fields: [{ key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, default: 1 }],
+      target: { fieldKey: 'miles', comparator: '>=', value: 1 },
     })
     expect(JSON.stringify(v)).not.toContain('undefined')
   })

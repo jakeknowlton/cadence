@@ -12,10 +12,10 @@ const run: TaskDefinition = {
   requiredCount: 1,
   completionType: 'fields',
   fields: [
-    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false, min: 0, step: 0.1, default: 1 },
+    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, step: 0.1, default: 1 },
     { key: 'time', label: 'Time', type: 'duration', required: false },
   ],
-  target: { fieldKey: 'miles', comparator: '>=', value: 1, gatesCompletion: false },
+  target: { fieldKey: 'miles', comparator: '>=', value: 1 },
 }
 
 function edit(patch: Partial<TaskDefinition>): TaskDefinition {
@@ -41,7 +41,7 @@ describe('classifyEdit', () => {
     expect(classifyEdit(run, edit({ activeDays: [1, 2, 3, 4, 5] })).class).toBe('measured')
     expect(classifyEdit(run, edit({ requiredCount: 2 })).class).toBe('measured')
     expect(classifyEdit(run, edit({ target: { ...run.target!, value: 2 } })).class).toBe('measured')
-    expect(classifyEdit(run, edit({ target: { ...run.target!, gatesCompletion: true } })).class).toBe('measured')
+    expect(classifyEdit(run, edit({ target: { ...run.target!, comparator: '==' } })).class).toBe('measured')
     expect(classifyEdit(run, edit({ target: undefined })).class).toBe('measured')
   })
 
@@ -52,7 +52,7 @@ describe('classifyEdit', () => {
   })
 
   it('field required/min/max/step/options/default are measured', () => {
-    for (const patch of [{ required: true }, { min: 0.5 }, { max: 100 }, { step: 1 }, { default: 2 }]) {
+    for (const patch of [{ required: false }, { min: 0.5 }, { max: 100 }, { step: 1 }, { default: 2 }]) {
       const changed = edit({ fields: [{ ...run.fields[0]!, ...patch }, run.fields[1]!] })
       expect(classifyEdit(run, changed).class).toBe('measured')
     }
@@ -100,13 +100,14 @@ describe('validateDefinition', () => {
     expect(validateDefinition(edit({ completionType: 'checkbox' }))).toContain('A checkbox task has no fields')
     expect(validateDefinition(edit({ fields: [], target: undefined }))).toContain('A fields task needs at least one field')
   })
-  it('a gating target must reference a required field', () => {
-    const gated = edit({ target: { ...run.target!, gatesCompletion: true } })
-    expect(validateDefinition(gated)).toContain('A target that gates completion must reference a required field')
+  it('a goal must be on a required field', () => {
+    expect(validateDefinition(run)).toEqual([])
+    const optional = edit({ fields: [{ ...run.fields[0]!, required: false }, run.fields[1]!] })
+    expect(validateDefinition(optional)).toContain('A goal must be on a required field')
   })
   it('target must point at a numeric field that exists', () => {
     expect(validateDefinition(edit({ target: { ...run.target!, fieldKey: 'nope' } }))[0]).toMatch(/unknown field/)
-    const onText = edit({ fields: [{ key: 'note', label: 'Note', type: 'text', required: true }], target: { fieldKey: 'note', comparator: '>=', value: 1, gatesCompletion: true } })
+    const onText = edit({ fields: [{ key: 'note', label: 'Note', type: 'text', required: true }], target: { fieldKey: 'note', comparator: '>=', value: 1 } })
     expect(validateDefinition(onText)).toContain('Target field must be a number or duration')
   })
 })

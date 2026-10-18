@@ -5,6 +5,7 @@ import type { Cadence, FieldType, TaskDefinition, TaskField, Weekday } from '@/t
 import type { TaskVersionDoc } from '@/types/group'
 import { classifyEdit, validateDefinition, type EditClassification } from '@/lib/taskEdits'
 import { effectiveFromForChange } from '@/lib/versions'
+import { formatValue } from '@/lib/completionStatus'
 import type { DateString } from '@/lib/periods'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -90,10 +91,21 @@ function toggleDay(d: Weekday) {
 const hasTarget = computed({
   get: () => !!def.target,
   set: (v) => {
-    def.target = v ? { fieldKey: numericFields.value[0]?.key ?? '', comparator: '>=', value: 1, gatesCompletion: false } : undefined
+    def.target = v ? { fieldKey: numericFields.value[0]?.key ?? '', comparator: '>=', value: 1 } : undefined
   },
 })
 const numericFields = computed(() => def.fields.filter((f) => f.type === 'number' || f.type === 'duration'))
+/** An "at least" or "exactly" goal is also the amount a one-tap log records; other goals have no obvious amount. */
+const goalDefault = computed(() => {
+  const t = def.target
+  if (!t || (t.comparator !== '>=' && t.comparator !== '==')) return undefined
+  return numOrUndef(t.value)
+})
+const isGoalField = (f: TaskField) => def.target?.fieldKey === f.key
+const goalDefaultLabel = computed(() => {
+  const f = def.fields.find(isGoalField)
+  return f && goalDefault.value !== undefined ? formatValue(goalDefault.value, f.type, f.unit?.trim()) : ''
+})
 const optionsText = reactive<Record<string, string>>({})
 
 function keyFor(label: string, existing: string[]): string {
@@ -165,7 +177,9 @@ const normalized = computed<TaskDefinition>(() => ({
     max: numOrUndef(f.max),
     step: numOrUndef(f.step),
     options: f.type === 'select' ? f.options : undefined,
-    default: f.default === '' || f.default === undefined || f.default === null ? undefined : f.default,
+    // The goal's field is always required and defaults to the goal amount.
+    required: isGoalField(f) || f.required,
+    default: isGoalField(f) ? goalDefault.value : undefined,
   })),
 }))
 function numOrUndef(v: unknown): number | undefined {
@@ -312,8 +326,9 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         />
         <div class="flex items-center justify-between">
           <Label :for="`req-${i}`">Required</Label>
-          <Switch :id="`req-${i}`" :model-value="f.required" @update:model-value="f.required = $event" />
+          <Switch :id="`req-${i}`" :model-value="isGoalField(f) || f.required" :disabled="isGoalField(f)" @update:model-value="f.required = $event" />
         </div>
+        <p v-if="isGoalField(f)" class="text-sm text-muted-foreground">Required because the goal uses it.</p>
         <p v-if="lockedKeys.has(f.key)" class="text-sm text-muted-foreground">
           Type and unit are locked so past entries stay comparable.
         </p>
@@ -343,13 +358,11 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
               placeholder="and"
             />
           </div>
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <Label for="task-gates">Goal required to count</Label>
-              <p class="text-sm text-muted-foreground">Off: the goal is a badge. On: a period is only done if the goal is met.</p>
-            </div>
-            <Switch id="task-gates" :model-value="def.target.gatesCompletion" @update:model-value="def.target!.gatesCompletion = $event" />
-          </div>
+          <p class="text-sm text-muted-foreground">
+            Only entries that meet the goal count.
+            <template v-if="goalDefault !== undefined">Tapping the check logs {{ goalDefaultLabel }} straight away.</template>
+            <template v-else>Members enter the value each time.</template>
+          </p>
         </template>
       </div>
     </div>

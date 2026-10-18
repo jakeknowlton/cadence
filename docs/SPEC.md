@@ -43,7 +43,7 @@ The app lives at `cadence.jkn.dev`. The package and Firebase project are named `
 | **Cadence** | How often a task recurs: daily, weekly, or monthly. |
 | **Period** | One specific day, week, or month that a task is measured in. |
 | **Completion** | A record that a member did a task in a period, with any logged values. Completions are facts and are never changed by later task edits. |
-| **Counting completion** | A completion that satisfies the task: all required fields present and, if the target gates completion, the target met. |
+| **Counting completion** | A completion that satisfies the task: all required fields present and, if the task has a goal, the goal met. |
 | **Cadence segment** | A run of consecutive task versions sharing the same cadence. Completion rate and streaks are reported per segment. |
 | **Edit window** | The number of recent days a member may still log or correct completions for. A group setting. |
 
@@ -96,22 +96,24 @@ A task version has the following properties.
 | Active days | For daily tasks only: which weekdays the task applies to. Default every day. |
 | Required count | How many counting completions make a period complete. Default 1. "Lift three times a week" is a weekly task with a required count of 3. |
 | Completion type | Checkbox, or fields. |
-| Fields | For field tasks: a list of inputs, each with a key, label, type (number, duration, text, yes/no, or choice), optional unit, whether it is required, and optional min, max, step, choices, and default. |
-| Target | Optional. A comparison against one field, such as miles at least 1 or calories at most 2200. A target either **gates completion**, meaning a completion only counts if the target is met, or is a **badge**, meaning it is shown as "goal met" but the completion counts regardless. A gating target must reference a required field. |
+| Fields | For field tasks: a list of inputs, each with a key, label, type (number, duration, text, yes/no, or choice), optional unit, whether it is required, and optional min, max, step, and choices. |
+| Goal | Optional. A comparison against one number or duration field, such as miles at least 1 or calories at most 2200. A completion only counts if it meets the goal, so done always means the goal was met. The goal's field is always required. An "at least" or "exactly" goal also sets that field's default to the goal amount, so the task can be completed in one tap and still records the amount. |
 
 ### Examples
 
 A weekdays-only checkbox, "Walk at lunch": daily, active Monday to Friday, checkbox, required count 1.
 
-A gated field task, "Log calories": daily, one required number field `kcal` in kcal, target kcal at most 2200, gates completion. Logging 2,400 kcal records the day but does not complete it.
+A field task without a goal, "Track calories": daily, one required number field `kcal` in kcal. Any number completes the day; the point is visibility.
 
-A badge field task, "Run a mile": daily, optional number field `miles` in miles defaulting to 1 and optional duration field `time`, target miles at least 1, badge only. Tapping done with no values completes the day; entering 1.5 miles also shows the goal badge.
+A field task with a ceiling, "Stay under 2200": daily, one required number field `kcal` in kcal, goal kcal at most 2200. Logging 2,400 kcal records the entry but does not complete the day. There is no obvious amount to default, so logging always opens the sheet.
+
+A field task with an amount, "Run a mile": daily, required number field `miles` in miles and optional duration field `time`, goal miles at least 1. Tapping the check logs 1 mile and completes the day. Opening the sheet lets the member enter 1.5 miles, which also completes it, or 0.5 miles, which is recorded but does not.
 
 ### When a period is done
 
 A period is complete for a member when the number of counting completions in it reaches the required count. A period is **inactive** for a member when the task's active days exclude it, the task version was not in effect, or the member was not yet in the group. Inactive periods are neither complete nor missed and are excluded from rates and streaks.
 
-The app validates every value against its field definition. "Goal met" is never stored; it is worked out when displayed from the completion and the task version it was logged against.
+A completion **counts** when every required field has a value and the goal, if there is one, is met. Whether a completion counts is never stored; it is worked out from the completion and the task version it was logged against. The app validates every value against its field definition.
 
 ### Editing tasks
 
@@ -120,7 +122,7 @@ Every completion keeps a snapshot of the task version it was logged against, so 
 | Class | Changes | Effect |
 |-------|---------|--------|
 | **Cosmetic** | Name, description, icon, sort order, field labels | Applied in place. History shows the new name. |
-| **Measured** | Cadence, active days, required count, completion type, adding or removing a field, a field's required flag, min, max, step, choices, or default, any part of the target | A new task version takes effect at the start of the next period. Past periods keep the old definition. |
+| **Measured** | Cadence, active days, required count, completion type, adding or removing a field, a field's required flag, min, max, step, or choices, any part of the goal | A new task version takes effect at the start of the next period. Past periods keep the old definition. |
 | **Refused** | Changing an existing field's type or unit, or reusing a removed field's key with a different type or unit | Not allowed. The editor offers **Replace task** instead. |
 
 The editor classifies the edit as the admin types and shows exactly what will happen, including the date a new version takes effect. New tasks start in the current period.
@@ -141,11 +143,11 @@ Members may log, edit, or delete their own completions for any period that ended
 
 The Today view is the home screen. It lists every active task across the member's groups, grouped by cadence, with the current period's status: not done, done, two of three, or logged but goal not met. Daily tasks do not appear on inactive days.
 
-A checkbox task completes with one tap and can be undone with another. A field task opens a sheet with its fields; required fields must be filled. Tasks with a required count above one show progress as completions accumulate. Any completion can carry a free-text note. Deleting a completion hides it; the record is kept.
+A checkbox task completes with one tap and can be undone with another. A field task whose fields all have defaults does the same, logging the defaults. Any other field task opens a sheet with its fields, and tapping the task's name always opens it; required fields must be filled. Tasks with a required count above one show progress as completions accumulate. Any completion can carry a free-text note. Deleting a completion hides it; the record is kept.
 
 ## History, stats, and charts
 
-Each group has an activity feed of who completed what, newest first, and a period grid of members against tasks for any chosen day, week, or month, showing done, missed, and goal met along with logged values. Past periods always use the task version that applied then.
+Each group has an activity feed of who completed what, newest first, and a period grid of members against tasks for any chosen day, week, or month, showing done, missed, and logged but goal not met, along with logged values. Past periods always use the task version that applied then.
 
 ### Stats
 
@@ -194,7 +196,7 @@ Each phase ends with something usable.
 | 0 Foundation | Firebase project and domain, local emulators, UI kit, app shell with bottom tabs, installable manifest, CI, period and task-edit logic with tests | The app runs locally against emulators and CI is green |
 | 1 Identity | Sign-in, invites, profiles, admin user management, last-admin protection | An admin invites someone who then signs in; uninvited users see nothing |
 | 2 Groups and tasks | Groups, membership, task editor with every field type and edit classification, versioning, replace task | Every task example works end to end; changing miles to kilometres is refused |
-| 3 Logging | Today view, check-off, field sheet, required counts, gating targets, edit window, offline | Members log daily and see the group grid |
+| 3 Logging | Today view, check-off, field sheet, required counts, goals, edit window, offline | Members log daily and see the group grid |
 | 4 History, stats, charts | Period grid for past periods, activity feed, monthly rollups, stats, charts with version markers | Changing a task's cadence leaves last month's grid untouched and the miles chart continuous |
 | 5 Notifications | Preferences, inbox written by the completing member's app, unread badge | A member sees exactly one inbox item when another checks off a task, even after an undo and redo |
 | 6 Polish | Wide-screen layout, empty states, accessibility pass | The group uses it for a week without hitting a blocker |
@@ -208,7 +210,7 @@ All decided 15 October 2026 unless noted.
 | # | Decision |
 |---|----------|
 | 1 | Admins are global only; no per-group admin role. |
-| 2 | Whether a target gates completion is configurable per task. |
+| 2 | A goal always decides whether a completion counts. There is no badge-only goal and no stretch goal; a task without a goal counts any entry. (Revised 18 October 2026.) |
 | 3 | Week start day is configurable per group. |
 | 4 | Invites are delivered by the admin copying a link. No email, for invites or notifications. |
 | 5 | UI library is shadcn-vue on Tailwind CSS. |

@@ -54,10 +54,10 @@ export const RUN_SNAPSHOT = {
   requiredCount: 1,
   completionType: 'fields',
   fields: [
-    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: false, min: 0, step: 0.1, default: 1 },
+    { key: 'miles', label: 'Distance', type: 'number', unit: 'mi', required: true, min: 0, step: 0.1, default: 1 },
     { key: 'time', label: 'Time', type: 'duration', required: false },
   ],
-  target: { fieldKey: 'miles', comparator: '>=', value: 1, gatesCompletion: false },
+  target: { fieldKey: 'miles', comparator: '>=', value: 1 },
 }
 
 export function version(overrides: Record<string, unknown> = {}) {

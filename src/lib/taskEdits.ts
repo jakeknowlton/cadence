@@ -112,8 +112,7 @@ export function validateDefinition(def: TaskDefinition): string[] {
     else {
       if (tf.type !== 'number' && tf.type !== 'duration')
         errors.push('Target field must be a number or duration')
-      if (def.target.gatesCompletion && !tf.required)
-        errors.push('A target that gates completion must reference a required field')
+      if (!tf.required) errors.push('A goal must be on a required field')
     }
     if (def.target.comparator === 'between' && def.target.valueMax === undefined)
       errors.push('A "between" target needs valueMax')

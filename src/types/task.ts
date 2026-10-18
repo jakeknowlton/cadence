@@ -23,7 +23,6 @@ export interface TaskTarget {
   comparator: '>=' | '<=' | '==' | 'between'
   value: number
   valueMax?: number
-  gatesCompletion: boolean
 }
 
 /** The editable definition of a task, independent of versioning metadata. */

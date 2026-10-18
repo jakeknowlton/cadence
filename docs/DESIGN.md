@@ -25,7 +25,7 @@ If push notifications or scheduled reminders are ever wanted, the step up is the
 | UI | shadcn-vue (Reka UI primitives, Tailwind CSS v4), components copied into `src/components/ui` |
 | Icons | Phosphor Icons via `@phosphor-icons/vue`; replaces the Lucide imports shadcn-vue scaffolds with. A curated set of 48 is bundled for task and group icons. |
 | Type | Bricolage Grotesque (variable, optical size axis), one family; 800 for headings, tabular numerals for stats |
-| Theme | Light and dark via CSS variables on `:root` and `.dark`; a Pinia theme store persists the choice (auto, light, dark) and an inline script in `index.html` applies it before first paint. Palette: Chalk `#F3F5F2` / Pine Night `#0F1613` backgrounds, Pine `#1E5A45` primary, Ochre `#B8791B` for goal met, Clay `#B4443A` for missed. |
+| Theme | Light and dark via CSS variables on `:root` and `.dark`; a Pinia theme store persists the choice (auto, light, dark) and an inline script in `index.html` applies it before first paint. Palette: Chalk `#F3F5F2` / Pine Night `#0F1613` backgrounds, Pine `#1E5A45` primary, Clay `#B4443A` for missed. |
 | Logo | `CadenceMark.vue`: a ring of seven segments around a check, in currentColor. `public/app-icon.svg` is the tile artwork; `pnpm icons` rasterises the PNGs with Playwright. |
 | Charts | `chart.js` via `vue-chartjs` |
 | Dates | `date-fns` and `date-fns-tz` |
@@ -124,7 +124,6 @@ interface TaskTarget {
   comparator: '>=' | '<=' | '==' | 'between'
   value: number
   valueMax?: number
-  gatesCompletion: boolean
 }
 
 interface NotificationPrefs {
@@ -192,7 +191,7 @@ Guards: `requiresAuth`, `requiresActiveUser`, `requiresAdmin`.
 
 Pinia stores wrap VueFire bindings: auth and profile; my groups and, for admins, all groups; the inbox with its unread count. Composables cover one group's document, roster, and task versions; one period's completions and in-effect tasks; the user's current date in their timezone; and logging, editing, and soft-deleting completions with inbox fan-out.
 
-Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, goal met); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
+Logic that does not touch Firebase lives in plain TypeScript modules with unit tests: period key maths, active-day and edit-window checks, week start handling; zod schema generation from field definitions; completion status (counting, complete, one-tap defaults); edit classification (cosmetic, measured, refused); stats and chart series from raw completions, per cadence segment; version document construction and edit classification.
 
 ### Components
 

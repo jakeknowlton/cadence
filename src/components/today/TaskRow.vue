@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhCheck, PhPlus, PhTarget } from '@phosphor-icons/vue'
+import { PhCheck, PhPlus } from '@phosphor-icons/vue'
 import type { TaskVersionDoc } from '@/types/group'
-import type { PeriodStatus } from '@/lib/completionStatus'
+import { quickValues, type PeriodStatus } from '@/lib/completionStatus'
 import { iconFor } from '@/lib/icons'
 
 const props = defineProps<{ version: TaskVersionDoc; status: PeriodStatus; editable: boolean; busy?: boolean }>()
 const emit = defineEmits<{ toggle: []; open: [] }>()
 
 const multi = computed(() => props.version.requiredCount > 1)
-const hasFields = computed(() => props.version.completionType === 'fields')
+/** Field tasks without defaults open the sheet instead of completing in one tap. */
+const needsSheet = computed(() => props.version.completionType === 'fields' && !quickValues(props.version.snapshot))
 const meta = computed(() => {
   const parts: string[] = []
   if (props.version.cadence !== 'daily') parts.push(props.version.cadence === 'weekly' ? 'this week' : 'this month')
@@ -27,9 +28,6 @@ const meta = computed(() => {
         <div class="truncate text-[1.02rem] font-semibold" :class="status.complete ? 'text-muted-foreground' : ''">{{ version.name }}</div>
         <div class="flex items-center gap-1.5 text-[0.8rem] text-muted-foreground">
           <span v-if="meta">{{ meta }}</span>
-          <span v-if="status.goalMet === true" class="inline-flex items-center gap-1 rounded-full bg-goal/15 px-1.5 py-px text-[0.72rem] font-semibold text-goal">
-            <PhTarget :size="11" weight="fill" /> goal met
-          </span>
         </div>
       </div>
     </button>
@@ -38,7 +36,7 @@ const meta = computed(() => {
       class="flex size-12 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-40"
       :class="status.complete ? 'scale-100 border-primary bg-primary text-primary-foreground' : 'border-border bg-surface text-muted-foreground hover:border-primary/60 hover:text-primary'"
       :disabled="!editable || busy"
-      :aria-label="status.complete ? 'Mark not done' : hasFields ? 'Log' : 'Mark done'"
+      :aria-label="status.complete ? 'Mark not done' : needsSheet ? 'Log' : 'Mark done'"
       :aria-pressed="status.complete"
       @click="emit('toggle')"
     >

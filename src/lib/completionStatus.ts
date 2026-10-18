@@ -102,13 +102,6 @@ export function roundToStep(value: number, step: number | undefined): number {
   return Number((Math.round(value / step) * step).toFixed(decimals))
 }
 
-/** Parses "45", "12:30", or "1:02:05" into seconds; null if blank or not a duration. */
-export function parseDuration(text: string): number | null {
-  const t = text.trim()
-  if (!t || !/^\d+(:\d{1,2}){0,2}$/.test(t)) return null
-  return t.split(':').map(Number).reduce((acc, n) => acc * 60 + n, 0)
-}
-
 export function formatValue(value: unknown, type: string, unit?: string): string {
   if (!hasValue(value)) return ''
   if (type === 'duration' && typeof value === 'number') {

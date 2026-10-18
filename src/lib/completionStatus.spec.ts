@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Timestamp } from 'firebase/firestore'
 import type { TaskSnapshot } from '@/types/group'
 import type { Completion } from '@/types/completion'
-import { entryMisses, formatValue, missingRequiredFields, parseDuration, periodStatus, periodTotals, qualifies, quickValues, roundToStep, totalProgress } from './completionStatus'
+import { entryMisses, formatValue, missingRequiredFields, periodStatus, periodTotals, qualifies, quickValues, roundToStep, totalProgress } from './completionStatus'
 
 const snap = (fields: TaskSnapshot['fields'], requiredCount = 1, cadence: TaskSnapshot['cadence'] = 'daily'): TaskSnapshot =>
   ({ cadence, activeDays: null, requiredCount, completionType: 'fields', fields })
@@ -97,17 +97,6 @@ describe('quickValues', () => {
   })
   it('a one-tap entry qualifies', () => {
     for (const s of [squats, sets, under, stretch]) expect(qualifies(s, quickValues(s)!)).toBe(true)
-  })
-})
-
-describe('parseDuration', () => {
-  it('reads seconds, m:ss, and h:mm:ss; rejects anything else', () => {
-    expect(parseDuration('45')).toBe(45)
-    expect(parseDuration('12:30')).toBe(750)
-    expect(parseDuration('1:02:05')).toBe(3725)
-    expect(parseDuration('')).toBeNull()
-    expect(parseDuration('1:2:3:4')).toBeNull()
-    expect(parseDuration('ten')).toBeNull()
   })
 })
 

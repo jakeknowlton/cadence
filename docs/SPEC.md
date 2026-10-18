@@ -113,7 +113,7 @@ Each field has a key, a label, and a type: number, duration, text, yes/no, or ch
 
 Any limit may be left empty; set a min and max to the same number for "exactly". Nothing is ever refused: an entry outside its limits is saved as a data point and simply does not qualify. A blank value never qualifies against a per-entry limit and adds nothing to a total.
 
-A default must be within its field's per-entry min and max and, for numbers, a multiple of its rounding, so an entry logged from the defaults always qualifies. Durations, including their limits and default, are entered as minutes and seconds or hours, minutes, and seconds.
+A default must be within its field's per-entry min and max and, for numbers, a multiple of its rounding, so an entry logged from the defaults always qualifies. Durations, including their limits and default, are entered in separate hours, minutes, and seconds boxes with the numeric keypad; two digits in a box moves on to the next, and 75 minutes tidies to 1 h 15 m when the field is left.
 
 ### Examples
 

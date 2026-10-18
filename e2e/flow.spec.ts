@@ -125,7 +125,10 @@ test('admin bootstraps, builds a group and task, logs it, and invites a friend w
   await run.getByRole('button', { name: /Run a mile/ }).click()
   await page.getByRole('button', { name: 'Edit' }).click()
   await page.getByLabel(/Distance/).fill('2')
-  await page.getByLabel(/Time/).fill('18:24')
+  // typing straight through: two digits fill minutes and move on to seconds
+  await page.getByLabel('Time minutes').click()
+  await page.keyboard.type('1824')
+  await expect(page.getByLabel('Time seconds')).toHaveValue('24')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await page.getByRole('link', { name: 'Test Crew' }).first().click()
   await page.getByRole('link', { name: 'Stats' }).click()

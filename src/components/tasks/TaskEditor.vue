@@ -356,7 +356,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         <template v-if="f.type === 'number' || f.type === 'duration'">
           <div v-for="limit in LIMITS" :key="limit.min" class="grid gap-1">
             <p class="text-xs font-semibold text-muted-foreground">{{ limit.label(PERIOD_NOUN[def.cadence]) }}</p>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid gap-2" :class="f.type === 'number' ? 'grid-cols-2' : 'grid-cols-1'">
               <template v-for="side in [limit.min, limit.max]" :key="side">
                 <Input
                   v-if="f.type === 'number'"
@@ -369,14 +369,15 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
                   :placeholder="side === limit.min ? 'Min' : 'Max'"
                   @update:model-value="f[side] = $event as number"
                 />
-                <DurationInput
-                  v-else
-                  :id="`${side}-${i}`"
-                  :model-value="f[side] ?? null"
-                  :aria-label="`${limit.aria} ${side === limit.min ? 'min' : 'max'}`"
-                  :placeholder="side === limit.min ? 'Min' : 'Max'"
-                  @update:model-value="f[side] = $event ?? undefined"
-                />
+                <div v-else class="flex items-center gap-3">
+                  <span class="w-8 text-xs text-muted-foreground">{{ side === limit.min ? 'Min' : 'Max' }}</span>
+                  <DurationInput
+                    :id="`${side}-${i}`"
+                    :model-value="f[side] ?? null"
+                    :aria-label="`${limit.aria} ${side === limit.min ? 'min' : 'max'}`"
+                    @update:model-value="f[side] = $event ?? undefined"
+                  />
+                </div>
               </template>
             </div>
           </div>
@@ -392,7 +393,7 @@ const canReplace = computed(() => !!props.current && errors.value.length === 0 &
         <div class="grid gap-1">
           <Label :for="`default-${i}`" class="text-xs text-muted-foreground">Default</Label>
           <Input v-if="f.type === 'number'" :id="`default-${i}`" :model-value="(f.default as number | string | undefined)" type="number" inputmode="decimal" step="any" placeholder="None" @update:model-value="f.default = $event" />
-          <DurationInput v-else-if="f.type === 'duration'" :id="`default-${i}`" :model-value="typeof f.default === 'number' ? f.default : null" placeholder="None" @update:model-value="f.default = $event ?? undefined" />
+          <DurationInput v-else-if="f.type === 'duration'" :id="`default-${i}`" aria-label="Default" :model-value="typeof f.default === 'number' ? f.default : null" @update:model-value="f.default = $event ?? undefined" />
           <YesNoInput v-else-if="f.type === 'boolean'" :id="`default-${i}`" label="Default" :model-value="typeof f.default === 'boolean' ? f.default : null" @update:model-value="f.default = $event ?? undefined" />
           <SelectField
             v-else-if="f.type === 'select'"

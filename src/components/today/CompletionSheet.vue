@@ -137,7 +137,7 @@ function submit() {
               v-else-if="f.type === 'duration'"
               :id="`f-${f.key}`"
               :model-value="(values[f.key] as number | null)"
-              placeholder="mm:ss or h:mm:ss"
+              :aria-label="f.label"
               @update:model-value="values[f.key] = $event ?? null"
             />
             <SelectField

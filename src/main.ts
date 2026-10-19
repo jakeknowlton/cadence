@@ -9,6 +9,7 @@ import router from './router'
 import { auth, firebaseApp, usingEmulators } from './firebase'
 import { useThemeStore } from './stores/theme'
 import { isChunkLoadError, reloadOnce } from './lib/reloadOnce'
+import { trackVisualViewport } from './lib/visualViewport'
 
 const app = createApp(App)
 
@@ -18,6 +19,7 @@ app.use(router)
 app.use(VueFire, { firebaseApp, modules: [VueFireAuth()] })
 
 app.mount('#app')
+trackVisualViewport()
 
 // Safety net for a deploy that replaced a screen's code under an open page: reload once into the new version.
 window.addEventListener('vite:preloadError', (e) => {

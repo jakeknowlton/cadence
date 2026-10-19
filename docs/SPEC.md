@@ -231,7 +231,7 @@ Notifications are written by the completing member's app directly into each reci
 ## Platform requirements
 
 - **Mobile-first.** Designed and built for a phone screen first; wider layouts are an enhancement. Navigation is a bottom tab bar (Today, Groups, Inbox, Me, and Admin for admins) that becomes a sidebar on wide screens. Tap targets are at least 44px, field entry uses a bottom sheet with a sticky primary button, and number fields bring up the numeric keyboard.
-- **Installable.** The app is a progressive web app: installable to the Home Screen, with icons, safe-area handling for notched phones, and an unread badge on the icon where the platform supports it.
+- **Installable.** The app is a progressive web app: installable to the Home Screen, with icons, safe-area handling for notched phones (content starts below the status bar, and the logging sheet and dialogs move above the on-screen keyboard), and an unread badge on the icon where the platform supports it.
 - **Smooth updates.** A new release never breaks an open app. It downloads in the background, and the app switches to it on the next refresh or reopen; in the meantime a small "Cadence has been updated" banner offers Refresh.
 - **Works offline.** The Today view loads instantly from cache, and a check-off made offline syncs when the connection returns.
 - **Dense views adapt.** The period grid shows one task or one member at a time on a phone and the full matrix on a wide screen. Charts are one per screen on a phone.

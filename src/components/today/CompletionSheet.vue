@@ -90,7 +90,7 @@ function submit() {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="bottom" class="max-h-[90dvh] overflow-y-auto rounded-t-3xl px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+    <SheetContent side="bottom" class="max-h-[calc(var(--visual-height,100dvh)-env(safe-area-inset-top)-1rem)] overflow-y-auto rounded-t-3xl px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
       <div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
       <SheetHeader v-if="version" class="p-0 text-left">
         <SheetTitle>{{ version.name }}</SheetTitle>

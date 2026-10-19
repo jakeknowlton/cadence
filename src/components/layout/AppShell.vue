@@ -25,7 +25,7 @@ const bare = computed(() => route.meta.bare === true)
 </script>
 
 <template>
-  <div v-if="bare" class="min-h-dvh bg-background text-foreground">
+  <div v-if="bare" class="min-h-dvh bg-background pt-[env(safe-area-inset-top)] text-foreground">
     <slot />
   </div>
 
@@ -53,7 +53,7 @@ const bare = computed(() => route.meta.bare === true)
       </nav>
     </aside>
 
-    <main class="min-w-0 flex-1 pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
+    <main class="min-w-0 flex-1 pt-[env(safe-area-inset-top)] pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
       <slot />
     </main>
 

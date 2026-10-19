@@ -3,11 +3,12 @@ import { ref, watch } from 'vue'
 import { useRegisterSW } from 'virtual:pwa-register/vue'
 import { PhArrowClockwise, PhX } from '@phosphor-icons/vue'
 import { Button } from '@/components/ui/button'
+import { reloadOnce } from '@/lib/reloadOnce'
 
 const HOUR = 60 * 60 * 1000
 
 // A new deploy downloads in the background and waits, so the open page keeps working from its own files.
-const { needRefresh, updateServiceWorker } = useRegisterSW({
+const { needRefresh } = useRegisterSW({
   onRegisteredSW(_url, registration) {
     if (!registration) return
     const check = () => {
@@ -21,7 +22,21 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
 })
 
 const dismissed = ref(false)
-const apply = () => updateServiceWorker(true)
+/**
+ * Hands over to the waiting version and reloads once it's in charge. Done directly rather than through
+ * the plugin, whose reload only fires for some kinds of update (not ones found by our own checks).
+ */
+async function apply() {
+  const waiting = (await navigator.serviceWorker?.getRegistration())?.waiting
+  if (!waiting) {
+    window.location.reload()
+    return
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
+  waiting.postMessage({ type: 'SKIP_WAITING' })
+  // If the handover never happens, reload anyway, but only once so a stuck worker can't loop the app.
+  setTimeout(() => reloadOnce(), 3000)
+}
 
 // Switch automatically when an update turns up just after the app loads or is reopened from the
 // background (the reopen check usually finishes a moment later). An update found mid-session waits

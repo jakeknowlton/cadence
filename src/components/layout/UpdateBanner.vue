@@ -23,17 +23,18 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
 const dismissed = ref(false)
 const apply = () => updateServiceWorker(true)
 
-// Switch automatically at natural moments: an update found while the app is loading (a refresh or a
-// cold start would otherwise keep the old worker), or when the app is reopened from the background.
-// An update found mid-session waits for the banner instead.
-const loadedAt = Date.now()
+// Switch automatically when an update turns up just after the app loads or is reopened from the
+// background (the reopen check usually finishes a moment later). An update found mid-session waits
+// for the banner instead.
+const SETTLE_MS = 10_000
+let openedAt = Date.now()
 watch(needRefresh, (ready) => {
-  if (ready && Date.now() - loadedAt < 10_000) apply()
+  if (ready && Date.now() - openedAt < SETTLE_MS) apply()
 })
-let wasHidden = false
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') wasHidden = true
-  else if (wasHidden && needRefresh.value) apply()
+  if (document.visibilityState !== 'visible') return
+  openedAt = Date.now()
+  if (needRefresh.value) apply()
 })
 </script>
 

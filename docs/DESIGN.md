@@ -32,7 +32,7 @@ If push notifications or scheduled reminders are ever wanted, the step up is the
 | Validation | `zod` schemas generated from task field definitions |
 | Auth | Firebase Auth: Google, and email and password with `sendEmailVerification`. Spark quotas: 1,000 verification and 150 password reset emails a day. |
 | Database | Cloud Firestore with offline persistence |
-| PWA | `vite-plugin-pwa` manifest and service worker; app badge via the Badging API |
+| PWA | `vite-plugin-pwa` manifest and service worker; app badge via the Badging API. The worker is in prompt mode: a new deploy downloads and waits, so an open page keeps loading screens from its own cache. `UpdateBanner` checks for updates hourly and on refocus, switches automatically when one is found while the app loads or when the app is reopened, and otherwise offers **Refresh**. A failed lazy import reloads once (`reloadOnce`, guarded to 30 seconds). Hosting sends `no-cache` for everything except hashed `/assets`, which are immutable for a year, and missing assets return 404 rather than the app shell. |
 | Hosting | Firebase Hosting with custom domain `cadence.jkn.dev`, also added to Firebase Auth authorized domains |
 | Local dev | Firebase Emulator Suite: Auth, Firestore, Functions |
 | Tests | Vitest for units and rules (`@firebase/rules-unit-testing` inside the emulator), Playwright end to end |

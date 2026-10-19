@@ -15,7 +15,10 @@ export default defineConfig(({ mode }) => ({
     ...(process.env.VITE_DEVTOOLS === '1' && mode === 'development' ? [vueDevTools()] : []),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt, not autoUpdate: a new version waits instead of deleting the cached files an open page still needs.
+      // UpdateBanner registers the worker, switches on load and on reopen, and otherwise offers Refresh.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Cadence',
